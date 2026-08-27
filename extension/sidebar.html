@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Logic Pollice</title>
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 16px; background: #f9fafb; color: #1f2937; }
+    h1 { font-size: 20px; font-weight: 700; margin-top: 0; }
+    .subtitle { font-size: 14px; color: #6b7280; margin-bottom: 16px; border-bottom: 1px solid #e5e7eb; padding-bottom: 12px; }
+    .status { font-size: 14px; color: #6b7280; padding: 12px; background: #f3f4f6; border-radius: 8px; margin-bottom: 12px; }
+    .loading { display: flex; align-items: center; gap: 8px; color: #2563eb; }
+    .spinner { width: 16px; height: 16px; border: 2px solid #e5e7eb; border-top: 2px solid #2563eb; border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .error { color: #dc2626; background: #fef2f2; padding: 12px; border-radius: 8px; border: 1px solid #fca5a5; }
+    .result { background: white; border-radius: 8px; padding: 12px; border: 1px solid #e5e7eb; }
+    .premise { padding: 6px 0; border-bottom: 1px solid #f3f4f6; }
+    .conclusion { padding: 6px 0; font-weight: 600; border-top: 2px solid #e5e7eb; margin-top: 6px; padding-top: 10px; }
+    .badge { display: inline-block; padding: 4px 12px; border-radius: 9999px; font-weight: 600; font-size: 14px; margin-top: 8px; }
+    .badge-valid { background: #dcfce7; color: #166534; }
+    .badge-invalid { background: #fee2e2; color: #991b1b; }
+    .formal { font-family: monospace; background: #f3f4f6; padding: 8px; border-radius: 4px; font-size: 13px; margin-top: 8px; }
+    kbd { background: #e5e7eb; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+    .implicit { border-left: 3px solid #f59e0b; padding-left: 8px; background: #fffbeb; margin: 4px 0; }
+    .explicit { border-left: 3px solid #3b82f6; padding-left: 8px; }
+  </style>
+</head>
+<body>
+  <h1>🔍 Logic Pollice</h1>
+  <div class="subtitle">Thumbs up/down for arguments</div>
+  <div id="content">
+    <div class="status">Highlight text and press <kbd>Ctrl+Shift+Y</kbd>.</div>
+  </div>
+  <script src="sidebar.js"></script>
+</body>
+</html>

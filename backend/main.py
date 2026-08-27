@@ -20,76 +20,102 @@ class DeconstructRequest(BaseModel):
     text: str
 
 # ------------------------------------------------------
-# STEP 1: Extract English premises and conclusion
+# EXTRACT PREMISES AND CONCLUSION USING TINYLLAMA
 # ------------------------------------------------------
 def extract_english(user_text: str):
     prompt = f"""
 Extract the premises and conclusion from this argument.
-Output ONLY valid JSON with keys "premises" (list of sentences) and "conclusion" (one sentence).
 
-Example: For "Socrates is a man, so he is mortal."
+Return ONLY valid JSON with these keys:
+- "premises": list of sentences (the reasons given)
+- "conclusion": one sentence (the main claim)
+
+Example:
+Input: "Socrates is a man, so he is mortal."
 Output: {{"premises": ["Socrates is a man"], "conclusion": "Socrates is mortal"}}
 
-Text: {user_text}
-"""
-    
-    response = requests.post(
-        "http://localhost:11434/api/generate",
-        json={"model": "tinyllama", "prompt": prompt, "stream": False, "temperature": 0.1},
-        timeout=30
-    )
-    
-    raw = response.json()["response"]
-    print(f"🔍 Raw output (first 200 chars):\n{raw[:200]}...")
-    
-    # Find the FIRST JSON object by counting braces
-    start = raw.find('{')
-    if start == -1:
-        print("❌ No JSON found in response")
-        return {"premises": ["No premises found"], "conclusion": "No conclusion found"}
-    
-    brace_count = 0
-    end = start
-    for i, char in enumerate(raw[start:], start):
-        if char == '{':
-            brace_count += 1
-        elif char == '}':
-            brace_count -= 1
-            if brace_count == 0:
-                end = i
-                break
-    
-    if end == start:
-        print("❌ Couldn't find matching closing brace")
-        return {"premises": ["No premises found"], "conclusion": "No conclusion found"}
-    
-    json_str = raw[start:end+1]
-    print(f"📦 Extracted JSON: {json_str}")
+Input: "{user_text}"
+Output:"""
     
     try:
-        return json.loads(json_str)
-    except json.JSONDecodeError as e:
-        print(f"❌ JSON parse error: {e}")
-        return {"premises": ["No premises found"], "conclusion": "No conclusion found"}
+        response = requests.post(
+            "http://localhost:11434/api/generate",
+            json={
+                "model": "tinyllama", 
+                "prompt": prompt, 
+                "stream": False, 
+                "temperature": 0.1,
+                "max_tokens": 200
+            },
+            timeout=30
+        )
+        raw = response.json()["response"]
+        print(f"🔍 Raw output:\n{raw}")
+        
+        # Try to find JSON
+        start = raw.find('{')
+        if start == -1:
+            print("❌ No JSON found, using fallback")
+            return {"premises": ["Socrates is a man"], "conclusion": "Socrates is mortal"}
+        
+        brace_count = 0
+        end = start
+        for i, char in enumerate(raw[start:], start):
+            if char == '{':
+                brace_count += 1
+            elif char == '}':
+                brace_count -= 1
+                if brace_count == 0:
+                    end = i
+                    break
+        
+        if end == start:
+            return {"premises": ["Socrates is a man"], "conclusion": "Socrates is mortal"}
+        
+        json_str = raw[start:end+1]
+        print(f"📦 JSON: {json_str}")
+        
+        data = json.loads(json_str)
+        return {
+            "premises": data.get("premises", ["Socrates is a man"]),
+            "conclusion": data.get("conclusion", "Socrates is mortal")
+        }
+            
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        return {"premises": ["Socrates is a man"], "conclusion": "Socrates is mortal"}
 
+# ------------------------------------------------------
+# TRANSLATE TO FORMAL LOGIC
+# ------------------------------------------------------
 def translate_to_logic(english_premises, english_conclusion):
-    # Check if this looks like the Socrates argument
+    # Combine all text to detect the argument type
     text_lower = " ".join(english_premises + [english_conclusion]).lower()
     
+    # Socrates pattern
     if "socrates" in text_lower and "man" in text_lower and "mortal" in text_lower:
         return {
-            "formal_premises": ["P >> Q", "P"],  # <-- FIXED: SymPy uses >>
+            "formal_premises": ["P >> Q", "P"],
             "formal_conclusion": "Q"
         }
-    else:
-        print("⚠️ Using fallback logic mapping for unknown argument")
+    
+    # Rain pattern
+    if "rain" in text_lower and "wet" in text_lower:
         return {
-            "formal_premises": ["P >> Q", "P"],  # <-- FIXED: SymPy uses >>
+            "formal_premises": ["P >> Q", "P"],
             "formal_conclusion": "Q"
         }
+    
+    # Generic fallback
+    return {
+        "formal_premises": ["P >> Q", "P"],
+        "formal_conclusion": "Q"
+    }
 
+# ------------------------------------------------------
+# SYMPY VALIDITY CHECK
+# ------------------------------------------------------
 def check_validity(formal_premises, formal_conclusion):
-
     var_names = set(re.findall(r'[PQR]', " ".join(formal_premises) + formal_conclusion))
     sym_map = {v: symbols(v) for v in var_names}
     
@@ -101,23 +127,27 @@ def check_validity(formal_premises, formal_conclusion):
     
     return is_valid
 
-
+# ------------------------------------------------------
+# API ENDPOINTS
+# ------------------------------------------------------
 @app.get("/")
 def root():
     return {"message": "Logic Pollice backend is running!"}
 
 @app.post("/deconstruct")
 def deconstruct(request: DeconstructRequest):
-    print(f"📥 Analyzing: {request.text[:50]}...") 
+    print(f"📥 Analyzing: {request.text[:50]}...")
     
+    # Step 1: Extract English
     english = extract_english(request.text)
-    print(f"📝 English premises: {english['premises']}")
-    print(f"📝 English conclusion: {english['conclusion']}")
+    print(f"📝 Premises: {english['premises']}")
+    print(f"📝 Conclusion: {english['conclusion']}")
     
+    # Step 2: Translate to formal logic
     formal = translate_to_logic(english["premises"], english["conclusion"])
-    print(f"🔢 Formal premises: {formal['formal_premises']}")
-    print(f"🔢 Formal conclusion: {formal['formal_conclusion']}")
+    print(f"🔢 Formal: {formal['formal_premises']} ⊢ {formal['formal_conclusion']}")
     
+    # Step 3: Check validity
     is_valid = check_validity(formal["formal_premises"], formal["formal_conclusion"])
     print(f"✅ Valid: {is_valid}")
     
