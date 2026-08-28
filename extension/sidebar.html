@@ -1,239 +1,492 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Logic Pollice</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz@14..32&family=Source+Serif+4:opsz@8..60&display=swap" rel="stylesheet">
-  <style>
-    /* ----- Reset & Base ----- */
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: 'Inter', -apple-system, system-ui, sans-serif;
-      background: #f4f7fc;
-      color: #1a2634;
-      padding: 24px 20px 32px;
-      line-height: 1.5;
-    }
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Logic Pollice</title>
 
-    /* ----- Header ----- */
-    .app-header {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 24px;
-      padding-bottom: 14px;
-      border-bottom: 1px solid #dce5ef;
-    }
-    .app-header .logo {
-      font-size: 26px;
-      line-height: 1;
-      opacity: 0.8;
-    }
-    .app-header .title {
-      font-family: 'Source Serif 4', Georgia, serif;
-      font-size: 22px;
-      font-weight: 600;
-      color: #0b2a4a;
-      letter-spacing: -0.3px;
-    }
-    .app-header .title span {
-      color: #3b7bb7;
-    }
-    .app-header .version {
-      font-size: 11px;
-      font-weight: 500;
-      color: #6b8aa8;
-      background: #e6edf5;
-      padding: 2px 10px;
-      border-radius: 30px;
-      margin-left: auto;
-      letter-spacing: 0.3px;
-      text-transform: uppercase;
-    }
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
-    /* ----- Verdict Badge ----- */
-    .verdict-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 22px;
-      border-radius: 40px;
-      font-weight: 600;
-      font-size: 17px;
-      margin: 8px 0 20px 0;
-      background: #ffffff;
-      box-shadow: 0 2px 6px rgba(0, 30, 60, 0.04);
-      border: 1px solid #dce5ef;
-    }
-    .verdict-badge.valid {
-      border-left: 5px solid #2d7a4b;
-      color: #1a4b2e;
-    }
-    .verdict-badge.invalid {
-      border-left: 5px solid #b13e3e;
-      color: #7a2e2e;
-    }
-    .verdict-badge .icon {
-      font-size: 20px;
-    }
+<style>
+  /* ============================================================
+     TOKENS
+     ============================================================ */
+  :root{
+    --bg:            #f5f6fa;
+    --paper:         #ffffff;
+    --paper-ruled:   #eef0f6;
+    --ink:           #1a2332;
+    --ink-soft:      #5a6478;
+    --rule:          #d8dce6;
 
-    /* ----- Cards ----- */
-    .card {
-      background: #ffffff;
-      border-radius: 14px;
-      padding: 16px 18px;
-      margin-bottom: 16px;
-      box-shadow: 0 2px 8px rgba(0, 30, 60, 0.04);
-      border: 1px solid #e6edf5;
-      transition: box-shadow 0.1s ease;
-    }
-    .card:hover {
-      box-shadow: 0 4px 12px rgba(0, 30, 60, 0.06);
-    }
-    .card-title {
-      font-weight: 600;
-      font-size: 13px;
-      color: #3b5f7a;
-      letter-spacing: 0.3px;
-      text-transform: uppercase;
-      margin-bottom: 10px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .card-title .emoji {
-      font-size: 15px;
-      text-transform: none;
-    }
+    --navy:          #1a3a5c;
+    --navy-soft:     #4a90d9;
+    --gold:          #d4a373;
+    --gold-deep:     #b8813f;
 
-    /* ----- Premises ----- */
-    .premise-item {
-      padding: 5px 0 5px 24px;
-      position: relative;
-      font-size: 14px;
-      color: #1f2d3a;
-      border-bottom: 1px solid #f0f4fa;
-    }
-    .premise-item:last-child {
-      border-bottom: none;
-    }
-    .premise-item::before {
-      content: "—";
-      position: absolute;
-      left: 4px;
-      color: #7ba3c7;
-      font-weight: 300;
-    }
-    .premise-item .num {
-      display: inline-block;
-      width: 22px;
-      color: #8aaec9;
-      font-weight: 400;
-      font-size: 12px;
-      margin-right: 4px;
-    }
+    --valid:         #2d7a4b;
+    --invalid:       #b13e3e;
 
-    /* ----- Conclusion ----- */
-    .conclusion-text {
-      font-family: 'Source Serif 4', Georgia, serif;
-      font-size: 16px;
-      font-weight: 500;
-      color: #0b2a4a;
-      padding: 4px 0 4px 16px;
-      border-left: 4px solid #3b7bb7;
-      margin: 2px 0;
-      line-height: 1.6;
-    }
+    --shadow-1:      0 1px 2px rgba(26,58,92,0.06), 0 1px 1px rgba(26,58,92,0.04);
+    --shadow-2:      0 6px 16px rgba(26,58,92,0.10), 0 2px 4px rgba(26,58,92,0.06);
 
-    /* ----- Formal Logic ----- */
-    .logic-box {
-      background: #f0f6fc;
-      border-radius: 10px;
-      padding: 12px 14px;
-      font-family: 'JetBrains Mono', 'Fira Code', monospace;
-      font-size: 13px;
-      color: #1a2b3c;
-      overflow-x: auto;
-      white-space: pre-wrap;
-      word-break: break-all;
-      border: 1px solid #dce5ef;
-    }
-    .logic-box .turnstile {
-      color: #6b8aa8;
-      font-weight: 300;
-      padding: 0 6px;
-    }
+    --font-sans:  'Inter', system-ui, sans-serif;
+    --font-serif: 'Source Serif 4', Georgia, serif;
+    --font-mono:  'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
 
-    /* ----- Placeholder / Loading / Error ----- */
-    .placeholder {
-      color: #8aaec9;
-      font-size: 14px;
-      text-align: center;
-      padding: 32px 0;
-    }
-    .loading {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 12px;
-      padding: 24px 0;
-      color: #3b7bb7;
-    }
-    .spinner {
-      width: 22px;
-      height: 22px;
-      border: 3px solid #dce5ef;
-      border-top: 3px solid #3b7bb7;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-    }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-    .error {
-      background: #fdf0f0;
-      color: #7a2e2e;
-      padding: 14px 18px;
-      border-radius: 12px;
-      border: 1px solid #f0d4d4;
-      font-size: 14px;
-    }
+    --radius-s: 6px;
+    --radius-m: 10px;
+    --radius-l: 14px;
 
-    /* ----- Utility ----- */
-    .mt-2 { margin-top: 8px; }
-    .text-muted { color: #6b8aa8; font-size: 13px; }
-    .hint {
-      text-align: center;
-      color: #8aaec9;
-      font-size: 13px;
-      margin-top: 20px;
-      padding: 10px 0;
-      border-top: 1px solid #e6edf5;
-    }
-    .hint kbd {
-      background: #e6edf5;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-family: 'Inter', monospace;
-      font-size: 12px;
-      color: #0b2a4a;
-      border: 1px solid #d0dce8;
-    }
-  </style>
+    color-scheme: light;
+  }
+
+  body.dark{
+    --bg:            #161d2b;
+    --paper:         #1e2739;
+    --paper-ruled:   #232e44;
+    --ink:           #eef1f7;
+    --ink-soft:      #9aa4bd;
+    --rule:          #303c56;
+
+    --navy:          #4a90d9;
+    --navy-soft:     #6fa8e0;
+    --gold:          #e0b689;
+    --gold-deep:     #d4a373;
+
+    --shadow-1:      0 1px 2px rgba(0,0,0,0.25);
+    --shadow-2:      0 8px 20px rgba(0,0,0,0.35);
+    color-scheme: dark;
+  }
+
+  *{ box-sizing: border-box; }
+  html,body{
+    margin:0; padding:0;
+    width: 350px;
+    min-height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  body{
+    transition: background 0.35s ease, color 0.35s ease;
+    display:flex;
+    flex-direction:column;
+    min-height:100vh;
+  }
+  @media (prefers-reduced-motion: reduce){
+    *, *::before, *::after{ animation-duration:0.001ms !important; animation-iteration-count:1 !important; transition-duration:0.001ms !important; }
+  }
+  button{ font-family:inherit; }
+  :focus-visible{ outline: 2px solid var(--navy-soft); outline-offset: 2px; border-radius: 4px; }
+
+  /* subtle laid-paper texture on the whole sidebar */
+  .paper-texture{
+    position:fixed; inset:0; pointer-events:none; z-index:0;
+    background-image: repeating-linear-gradient(
+      to bottom, transparent 0 27px, var(--paper-ruled) 27px 28px
+    );
+    opacity:0.35;
+    mask-image: linear-gradient(to bottom, transparent, black 120px);
+  }
+
+  /* ============================================================
+     HEADER
+     ============================================================ */
+  header{
+    position:relative; z-index:1;
+    display:flex; align-items:center; gap:10px;
+    padding:16px 18px 14px;
+    border-bottom: 1px solid var(--rule);
+    background: var(--paper);
+  }
+  .emblem{
+    width:34px; height:34px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    background: radial-gradient(circle at 32% 28%, var(--navy-soft), var(--navy) 70%);
+    color: var(--gold);
+    font-size:16px;
+    box-shadow: inset 0 0 0 1px rgba(212,163,115,0.5), var(--shadow-1);
+    flex-shrink:0;
+  }
+  .brand{ flex:1; min-width:0; }
+  .brand .name{
+    font-family: var(--font-serif);
+    font-weight:700;
+    font-size:16.5px;
+    letter-spacing:0.2px;
+    line-height:1.1;
+    color: var(--ink);
+  }
+  .brand .tag{
+    font-size:10.5px;
+    color: var(--ink-soft);
+    letter-spacing:0.6px;
+    text-transform:uppercase;
+    margin-top:2px;
+  }
+
+  /* dark mode toggle — styled like a small brass rivet switch */
+  .theme-toggle{
+    width:44px; height:24px; border-radius:999px;
+    border:1px solid var(--rule);
+    background: var(--paper-ruled);
+    position:relative; cursor:pointer;
+    flex-shrink:0;
+    transition: background 0.3s ease, border-color 0.3s ease;
+  }
+  .theme-toggle .knob{
+    position:absolute; top:2px; left:2px;
+    width:18px; height:18px; border-radius:50%;
+    background: linear-gradient(160deg, var(--gold), var(--gold-deep));
+    box-shadow: var(--shadow-1);
+    display:flex; align-items:center; justify-content:center;
+    font-size:10px;
+    transition: transform 0.32s cubic-bezier(.65,-0.15,.35,1.15);
+  }
+  body.dark .theme-toggle .knob{ transform: translateX(20px); }
+  .theme-toggle .icon-sun, .theme-toggle .icon-moon{ position:absolute; top:50%; transform:translateY(-50%); font-size:11px; opacity:0.55; }
+  .theme-toggle .icon-sun{ left:5px; }
+  .theme-toggle .icon-moon{ right:5px; }
+
+  /* ============================================================
+     MAIN
+     ============================================================ */
+  main{
+    position:relative; z-index:1;
+    flex:1;
+    padding:16px 16px 8px;
+    display:flex; flex-direction:column;
+    gap:14px;
+  }
+
+  /* ---------- verdict: wax-seal stamp ---------- */
+  .verdict-wrap{
+    display:flex; align-items:center; gap:14px;
+    padding:14px 16px;
+    background: var(--paper);
+    border:1px solid var(--rule);
+    border-radius: var(--radius-l);
+    box-shadow: var(--shadow-1);
+  }
+  .seal{
+    width:52px; height:52px; border-radius:50%;
+    flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    font-size:22px; color:#fff;
+    position:relative;
+    transform: scale(0) rotate(-18deg);
+    opacity:0;
+  }
+  .seal.stamp-in{
+    animation: stampIn 0.55s cubic-bezier(.2,1.4,.4,1) forwards;
+  }
+  @keyframes stampIn{
+    0%{ transform: scale(0.3) rotate(-24deg); opacity:0; }
+    55%{ transform: scale(1.12) rotate(4deg); opacity:1; }
+    75%{ transform: scale(0.96) rotate(-2deg); }
+    100%{ transform: scale(1) rotate(0deg); opacity:1; }
+  }
+  .seal::before{
+    content:''; position:absolute; inset:-4px; border-radius:50%;
+    border:1.5px dashed currentColor; opacity:0.35;
+  }
+  .seal.valid{ background: radial-gradient(circle at 30% 25%, #3f9762, var(--valid) 75%); color: var(--valid); }
+  .seal.invalid{ background: radial-gradient(circle at 30% 25%, #cf5b5b, var(--invalid) 75%); color: var(--invalid); }
+  .seal .mark{ color:#fdf9f2; z-index:1; }
+
+  .verdict-text .label{
+    font-family: var(--font-serif);
+    font-weight:700;
+    font-size:17px;
+  }
+  .verdict-text .label.valid{ color: var(--valid); }
+  .verdict-text .label.invalid{ color: var(--invalid); }
+  .verdict-text .sub{
+    font-size:11.5px; color: var(--ink-soft);
+    margin-top:2px;
+  }
+  .verdict-text .why-trigger{
+    background:none; border:none; padding:0; margin-top:4px;
+    font-size:11px; color: var(--navy-soft); cursor:pointer;
+    text-decoration: underline dotted;
+    text-underline-offset:2px;
+  }
+  .tooltip{
+    display:none;
+    margin-top:8px;
+    font-size:11.5px; line-height:1.5;
+    color: var(--ink-soft);
+    background: var(--paper-ruled);
+    border-left: 2px solid var(--gold);
+    padding:8px 10px;
+    border-radius: 0 6px 6px 0;
+  }
+  .tooltip.open{ display:block; }
+
+  /* ---------- generic card ---------- */
+  .card{
+    background: var(--paper);
+    border:1px solid var(--rule);
+    border-radius: var(--radius-m);
+    box-shadow: var(--shadow-1);
+    transition: box-shadow 0.25s ease, transform 0.25s ease;
+    overflow:hidden;
+  }
+  .card:hover{ box-shadow: var(--shadow-2); transform: translateY(-1px); }
+  .card-head{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:10px 14px;
+    border-bottom:1px solid var(--rule);
+  }
+  .card-head h2{
+    margin:0; font-size:11px; font-weight:600;
+    letter-spacing:0.7px; text-transform:uppercase;
+    color: var(--ink-soft);
+    display:flex; align-items:center; gap:6px;
+  }
+  .card-head .count-pill{
+    font-size:10px; color: var(--navy);
+    background: rgba(74,144,217,0.12);
+    border-radius:999px; padding:1px 7px;
+    font-weight:600;
+  }
+  .collapse-btn{
+    background:none; border:none; cursor:pointer;
+    color: var(--ink-soft); font-size:11px;
+    padding:2px 4px;
+  }
+
+  /* ---------- premises ---------- */
+  .premise-list{ list-style:none; margin:0; padding:4px 4px; }
+  .premise-list li{
+    display:flex; gap:10px;
+    padding:9px 10px;
+    border-bottom:1px solid var(--rule);
+    opacity:0; transform: translateX(-6px);
+    font-size:13px; line-height:1.45;
+    transition: background 0.2s ease;
+  }
+  .premise-list li:last-child{ border-bottom:none; }
+  .premise-list li:hover{ background: var(--paper-ruled); }
+  .premise-list li.fade-in{ animation: fadeSlideIn 0.4s ease forwards; }
+  .premise-list .num{
+    font-family: var(--font-mono);
+    font-size:11px; color: var(--gold-deep);
+    flex-shrink:0; padding-top:1px;
+  }
+  @keyframes fadeSlideIn{
+    to{ opacity:1; transform:none; }
+  }
+  .premise-list.collapsed li:nth-child(n+6){ display:none; }
+  .show-more{
+    width:100%; text-align:center;
+    background:none; border:none; cursor:pointer;
+    font-size:11px; color: var(--navy-soft);
+    padding:8px; border-top:1px solid var(--rule);
+  }
+
+  /* ---------- conclusion ---------- */
+  .conclusion-card{ padding:14px 16px 14px 14px; border-left:3px solid var(--gold); }
+  .conclusion-card .eyebrow{
+    font-size:10.5px; font-weight:600; letter-spacing:0.6px; text-transform:uppercase;
+    color: var(--gold-deep); margin-bottom:4px;
+  }
+  .conclusion-card p{
+    margin:0; font-family: var(--font-serif);
+    font-size:15.5px; line-height:1.5; color: var(--ink);
+  }
+
+  /* ---------- formal logic ---------- */
+  .formal-body{ padding:12px 14px; }
+  .formal-line{
+    display:flex; align-items:center; flex-wrap:wrap; gap:6px;
+    font-family: var(--font-mono);
+    font-size:12.5px; color: var(--ink);
+    background: var(--paper-ruled);
+    border-radius: var(--radius-s);
+    padding:10px 12px;
+    line-height:1.6;
+  }
+  .formal-line .turnstile{ color: var(--navy); font-weight:600; padding:0 2px; }
+  .formal-line .premise-token{ color: var(--ink-soft); }
+  .formal-line .premise-token:not(:last-of-type)::after{ content:','; color: var(--ink-soft); margin-right:2px; }
+  .copy-btn{
+    display:flex; align-items:center; gap:5px;
+    margin-top:9px;
+    background: var(--paper); border:1px solid var(--rule);
+    border-radius: var(--radius-s);
+    padding:5px 10px;
+    font-size:11px; color: var(--ink-soft); cursor:pointer;
+    transition: border-color 0.2s ease, color 0.2s ease;
+  }
+  .copy-btn:hover{ border-color: var(--navy-soft); color: var(--navy); }
+  .copy-btn.copied{ color: var(--valid); border-color: var(--valid); }
+
+  /* ============================================================
+     LOADING STATE — ink line being drawn
+     ============================================================ */
+  .loading-state{
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:14px; padding:44px 20px; text-align:center;
+  }
+  .ink-draw{ width:120px; height:2px; background: var(--rule); border-radius:2px; position:relative; overflow:hidden; }
+  .ink-draw::after{
+    content:''; position:absolute; top:0; left:-40%; width:40%; height:100%;
+    background: linear-gradient(90deg, transparent, var(--navy-soft), transparent);
+    animation: inkTravel 1.3s ease-in-out infinite;
+  }
+  @keyframes inkTravel{
+    0%{ left:-40%; }
+    100%{ left:100%; }
+  }
+  .loading-state .msg{ font-size:12.5px; color: var(--ink-soft); }
+  .loading-state .msg .quill{ display:inline-block; animation: quillBob 1.3s ease-in-out infinite; }
+  @keyframes quillBob{ 0%,100%{ transform:translateY(0);} 50%{ transform:translateY(-3px);} }
+
+  /* ---------- error state ---------- */
+  .error-state{
+    display:flex; flex-direction:column; align-items:center; text-align:center;
+    gap:8px; padding:40px 24px;
+    color: var(--ink-soft);
+  }
+  .error-state .glyph{
+    width:40px; height:40px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    background: rgba(177,62,62,0.1); color: var(--invalid);
+    font-size:17px;
+  }
+  .error-state h3{ margin:2px 0 0; font-size:13.5px; color: var(--ink); font-weight:600; }
+  .error-state p{ margin:0; font-size:12px; max-width:230px; line-height:1.5; }
+  .retry-btn{
+    margin-top:6px;
+    background: var(--navy); color:#fdf9f2; border:none;
+    border-radius: var(--radius-s); padding:7px 16px;
+    font-size:12px; font-weight:500; cursor:pointer;
+    transition: background 0.2s ease, transform 0.15s ease;
+  }
+  .retry-btn:hover{ background: var(--navy-soft); transform: translateY(-1px); }
+
+  /* ---------- empty state ---------- */
+  .empty-state{
+    display:flex; flex-direction:column; align-items:center; text-align:center;
+    gap:10px; padding:46px 26px; color: var(--ink-soft);
+  }
+  .empty-state .glyph{ font-size:26px; color: var(--gold-deep); opacity:0.8; }
+  .empty-state p{ margin:0; font-size:12.5px; line-height:1.55; max-width:220px; }
+  .empty-state kbd{
+    font-family: var(--font-mono); font-size:11px;
+    background: var(--paper-ruled); border:1px solid var(--rule);
+    border-bottom-width:2px;
+    padding:2px 6px; border-radius:4px; color: var(--ink);
+  }
+
+  .hidden{ display:none !important; }
+
+  /* ============================================================
+     FOOTER
+     ============================================================ */
+  footer{
+    position:relative; z-index:1;
+    margin-top:auto;
+    padding:10px 16px 14px;
+    display:flex; align-items:center; justify-content:center; gap:6px;
+    font-size:10.5px; color: var(--ink-soft);
+    border-top:1px solid var(--rule);
+    background: var(--paper);
+  }
+  footer kbd{
+    font-family: var(--font-mono); font-size:10px;
+    background: var(--paper-ruled); border:1px solid var(--rule);
+    border-bottom-width:2px;
+    padding:1.5px 5px; border-radius:4px; color: var(--ink);
+  }
+</style>
 </head>
 <body>
-  <div class="app-header">
-    <span class="logo">⚖️</span>
-    <span class="title">Logic<span>Pollice</span></span>
-    <span class="version">v3</span>
-  </div>
 
-  <div id="content">
-    <div class="placeholder">Highlight text and press <kbd>Ctrl+Shift+Y</kbd></div>
-  </div>
+  <div class="paper-texture"></div>
+
+  <header>
+    <div class="emblem">⚖</div>
+    <div class="brand">
+      <div class="name">Logic Pollice</div>
+      <div class="tag">v3 · syllogism check</div>
+    </div>
+    <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode" aria-pressed="false">
+      <span class="icon-sun">☀</span>
+      <span class="icon-moon">☾</span>
+      <span class="knob"></span>
+    </button>
+  </header>
+
+  <main id="main">
+
+    <!-- LOADING STATE -->
+    <div class="loading-state hidden" id="loadingState">
+      <div class="ink-draw"></div>
+      <div class="msg"><span class="quill">🖋</span>&nbsp; Parsing the argument…</div>
+    </div>
+
+    <!-- ERROR STATE -->
+    <div class="error-state hidden" id="errorState">
+      <div class="glyph">!</div>
+      <h3>Couldn't parse that argument</h3>
+      <p id="errorMessage">The extraction step didn't return a usable set of premises.</p>
+      <button class="retry-btn" id="retryBtn">Try again</button>
+    </div>
+
+    <!-- EMPTY STATE -->
+    <div class="empty-state hidden" id="emptyState">
+      <div class="glyph">⚖</div>
+      <p>Highlight an argument on the page, then press <kbd>Ctrl+Shift+Y</kbd> to check it.</p>
+    </div>
+
+    <!-- RESULT STATE -->
+    <div id="resultState" class="hidden">
+
+      <div class="verdict-wrap">
+        <div class="seal" id="seal"><span class="mark" id="sealMark"></span></div>
+        <div class="verdict-text">
+          <div class="label" id="verdictLabel"></div>
+          <div class="sub" id="verdictSub"></div>
+          <button class="why-trigger" id="whyTrigger">why?</button>
+          <div class="tooltip" id="tooltip"></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:14px;">
+        <div class="card-head">
+          <h2>📋 Premises <span class="count-pill" id="premiseCount">0</span></h2>
+          <button class="collapse-btn hidden" id="collapseToggle">collapse</button>
+        </div>
+        <ul class="premise-list" id="premiseList"></ul>
+      </div>
+
+      <div class="card conclusion-card" style="margin-top:14px;">
+        <div class="eyebrow">🎯 Conclusion</div>
+        <p id="conclusionText"></p>
+      </div>
+
+      <div class="card" style="margin-top:14px;">
+        <div class="card-head"><h2>🔢 Formal Logic</h2></div>
+        <div class="formal-body">
+          <div class="formal-line" id="formalLine"></div>
+          <button class="copy-btn" id="copyBtn">
+            <span id="copyIcon">⧉</span> <span id="copyLabel">Copy</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <footer>
+    Press <kbd>Ctrl+Shift+Y</kbd> to re-run on selection
+  </footer>
 
   <script src="sidebar.js"></script>
 </body>

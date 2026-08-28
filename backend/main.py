@@ -75,6 +75,7 @@ def extract_arguments(text: str) -> dict:
     if not best_conc or best_conc[2] < 0.5:
         conclusion = sentences[-1]
         premise_indices = list(range(n - 1))
+        conclusion_idx = n - 1  # <--- FIX: set conclusion_idx here
     else:
         conclusion = best_conc[1]
         conclusion_idx = best_conc[0]
@@ -141,7 +142,6 @@ def extract_arguments(text: str) -> dict:
         final_premises.remove(conclusion)
 
     return {"premises": final_premises, "conclusion": conclusion}
-
 # ------------------------------------------------------------------
 # 3. FORMAL LOGIC TRANSLATION
 # ------------------------------------------------------------------
