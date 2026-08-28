@@ -5,71 +5,88 @@ async function getCurrentTabId() {
   return tabs[0].id;
 }
 
-function renderResult(container, data) {
-  let html = '<div class="result">';
+function renderResult(data) {
+  const container = document.getElementById('content');
+
+  // Verdict badge
+  const verdictClass = data.valid ? 'valid' : 'invalid';
+  const verdictIcon = data.valid ? '✓' : '✗';
+  const verdictText = data.valid ? 'Valid' : 'Invalid';
+
+  let html = `
+    <div class="verdict-badge ${verdictClass}">
+      <span class="icon">${verdictIcon}</span>
+      ${verdictText}
+    </div>
+  `;
 
   // Premises
-  html += '<div style="font-weight:600;font-size:14px;margin-bottom:6px;">📋 Premises</div>';
+  html += `<div class="card"><div class="card-title"><span class="emoji">📋</span> Premises</div>`;
   if (data.premises && data.premises.length) {
-    data.premises.forEach(p => {
-      html += `<div class="premise">• ${p}</div>`;
+    data.premises.forEach((p, idx) => {
+      html += `<div class="premise-item"><span class="num">${idx+1}.</span> ${p}</div>`;
     });
   } else {
-    html += `<div style="color:#6b7280;font-size:13px;">No premises found</div>`;
+    html += `<div class="text-muted" style="padding:4px 0;">No premises extracted.</div>`;
   }
+  html += `</div>`;
 
   // Conclusion
-  html += '<div class="conclusion">🎯 Conclusion</div>';
-  html += `<div style="padding:6px 0;border-bottom:none;">• ${data.conclusion}</div>`;
+  html += `<div class="card"><div class="card-title"><span class="emoji">🎯</span> Conclusion</div>`;
+  html += `<div class="conclusion-text">${data.conclusion || 'No conclusion identified.'}</div>`;
+  html += `</div>`;
 
-  // Formal logic
+  // Formal Logic
   if (data.formal_premises && data.formal_premises.length) {
-    html += '<div class="formal">';
-    html += `<div>Formal: ${data.formal_premises.join(', ')} ⊢ ${data.formal_conclusion}</div>`;
-    html += '</div>';
+    const logicStr = data.formal_premises.join(', ') + ' ' + '⊢' + ' ' + data.formal_conclusion;
+    html += `<div class="card"><div class="card-title"><span class="emoji">🔢</span> Formal Logic</div>`;
+    html += `<div class="logic-box">${logicStr}</div>`;
+    html += `</div>`;
   }
 
-  // Validity badge
-  const badgeClass = data.valid ? 'badge-valid' : 'badge-invalid';
-  const badgeText = data.valid ? '✅ VALID' : '❌ INVALID';
-  html += `<div class="badge ${badgeClass}">${badgeText}</div>`;
+  // Hint
+  html += `<div class="hint">💡 Re‑highlight and press <kbd>Ctrl+Shift+Y</kbd></div>`;
 
-  html += '</div>';
-  html += `<div class="status" style="margin-top:12px;">💡 Re-highlight and press <kbd>Ctrl+Shift+Y</kbd></div>`;
   container.innerHTML = html;
 }
 
-function renderError(container, message) {
-  container.innerHTML = `<div class="error">❌ ${message}</div>`;
+function renderError(msg) {
+  const container = document.getElementById('content');
+  container.innerHTML = `<div class="error">⚠️ ${msg}</div>`;
 }
 
-function renderLoading(container) {
+function renderLoading() {
+  const container = document.getElementById('content');
   container.innerHTML = `
     <div class="loading">
       <div class="spinner"></div>
-      <span>Analyzing...</span>
+      <span>Analyzing argument…</span>
     </div>
   `;
 }
 
-async function analyzeHighlight() {
-  const content = document.getElementById('content');
-  renderLoading(content);
-
+async function analyze() {
+  renderLoading();
   try {
     const tabId = await getCurrentTabId();
     chrome.runtime.sendMessage({ action: 'analyzeHighlight', tabId: tabId }, (response) => {
       if (chrome.runtime.lastError) {
-        renderError(content, 'Extension error');
+        renderError('Extension error. Reload the page and try again.');
         return;
       }
-      if (response.error) renderError(content, response.error);
-      else if (response.success) renderResult(content, response.data);
-      else renderError(content, 'Unknown error.');
+      if (response.error) {
+        renderError(response.error);
+        return;
+      }
+      if (response.success) {
+        renderResult(response.data);
+      } else {
+        renderError('Unknown response from background.');
+      }
     });
-  } catch (error) {
-    renderError(content, 'Error: ' + error.message);
+  } catch (e) {
+    renderError('Error: ' + e.message);
   }
 }
 
-setTimeout(analyzeHighlight, 100);
+setTimeout(analyze, 200);

@@ -2,34 +2,239 @@
 <html>
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Logic Pollice</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz@14..32&family=Source+Serif+4:opsz@8..60&display=swap" rel="stylesheet">
   <style>
-    body { font-family: system-ui, sans-serif; padding: 16px; background: #f9fafb; color: #1f2937; }
-    h1 { font-size: 20px; font-weight: 700; margin-top: 0; }
-    .subtitle { font-size: 14px; color: #6b7280; margin-bottom: 16px; border-bottom: 1px solid #e5e7eb; padding-bottom: 12px; }
-    .status { font-size: 14px; color: #6b7280; padding: 12px; background: #f3f4f6; border-radius: 8px; margin-bottom: 12px; }
-    .loading { display: flex; align-items: center; gap: 8px; color: #2563eb; }
-    .spinner { width: 16px; height: 16px; border: 2px solid #e5e7eb; border-top: 2px solid #2563eb; border-radius: 50%; animation: spin 0.8s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .error { color: #dc2626; background: #fef2f2; padding: 12px; border-radius: 8px; border: 1px solid #fca5a5; }
-    .result { background: white; border-radius: 8px; padding: 12px; border: 1px solid #e5e7eb; }
-    .premise { padding: 6px 0; border-bottom: 1px solid #f3f4f6; }
-    .conclusion { padding: 6px 0; font-weight: 600; border-top: 2px solid #e5e7eb; margin-top: 6px; padding-top: 10px; }
-    .badge { display: inline-block; padding: 4px 12px; border-radius: 9999px; font-weight: 600; font-size: 14px; margin-top: 8px; }
-    .badge-valid { background: #dcfce7; color: #166534; }
-    .badge-invalid { background: #fee2e2; color: #991b1b; }
-    .formal { font-family: monospace; background: #f3f4f6; padding: 8px; border-radius: 4px; font-size: 13px; margin-top: 8px; }
-    kbd { background: #e5e7eb; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
-    .implicit { border-left: 3px solid #f59e0b; padding-left: 8px; background: #fffbeb; margin: 4px 0; }
-    .explicit { border-left: 3px solid #3b82f6; padding-left: 8px; }
+    /* ----- Reset & Base ----- */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Inter', -apple-system, system-ui, sans-serif;
+      background: #f4f7fc;
+      color: #1a2634;
+      padding: 24px 20px 32px;
+      line-height: 1.5;
+    }
+
+    /* ----- Header ----- */
+    .app-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid #dce5ef;
+    }
+    .app-header .logo {
+      font-size: 26px;
+      line-height: 1;
+      opacity: 0.8;
+    }
+    .app-header .title {
+      font-family: 'Source Serif 4', Georgia, serif;
+      font-size: 22px;
+      font-weight: 600;
+      color: #0b2a4a;
+      letter-spacing: -0.3px;
+    }
+    .app-header .title span {
+      color: #3b7bb7;
+    }
+    .app-header .version {
+      font-size: 11px;
+      font-weight: 500;
+      color: #6b8aa8;
+      background: #e6edf5;
+      padding: 2px 10px;
+      border-radius: 30px;
+      margin-left: auto;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+    }
+
+    /* ----- Verdict Badge ----- */
+    .verdict-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 22px;
+      border-radius: 40px;
+      font-weight: 600;
+      font-size: 17px;
+      margin: 8px 0 20px 0;
+      background: #ffffff;
+      box-shadow: 0 2px 6px rgba(0, 30, 60, 0.04);
+      border: 1px solid #dce5ef;
+    }
+    .verdict-badge.valid {
+      border-left: 5px solid #2d7a4b;
+      color: #1a4b2e;
+    }
+    .verdict-badge.invalid {
+      border-left: 5px solid #b13e3e;
+      color: #7a2e2e;
+    }
+    .verdict-badge .icon {
+      font-size: 20px;
+    }
+
+    /* ----- Cards ----- */
+    .card {
+      background: #ffffff;
+      border-radius: 14px;
+      padding: 16px 18px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 8px rgba(0, 30, 60, 0.04);
+      border: 1px solid #e6edf5;
+      transition: box-shadow 0.1s ease;
+    }
+    .card:hover {
+      box-shadow: 0 4px 12px rgba(0, 30, 60, 0.06);
+    }
+    .card-title {
+      font-weight: 600;
+      font-size: 13px;
+      color: #3b5f7a;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-title .emoji {
+      font-size: 15px;
+      text-transform: none;
+    }
+
+    /* ----- Premises ----- */
+    .premise-item {
+      padding: 5px 0 5px 24px;
+      position: relative;
+      font-size: 14px;
+      color: #1f2d3a;
+      border-bottom: 1px solid #f0f4fa;
+    }
+    .premise-item:last-child {
+      border-bottom: none;
+    }
+    .premise-item::before {
+      content: "—";
+      position: absolute;
+      left: 4px;
+      color: #7ba3c7;
+      font-weight: 300;
+    }
+    .premise-item .num {
+      display: inline-block;
+      width: 22px;
+      color: #8aaec9;
+      font-weight: 400;
+      font-size: 12px;
+      margin-right: 4px;
+    }
+
+    /* ----- Conclusion ----- */
+    .conclusion-text {
+      font-family: 'Source Serif 4', Georgia, serif;
+      font-size: 16px;
+      font-weight: 500;
+      color: #0b2a4a;
+      padding: 4px 0 4px 16px;
+      border-left: 4px solid #3b7bb7;
+      margin: 2px 0;
+      line-height: 1.6;
+    }
+
+    /* ----- Formal Logic ----- */
+    .logic-box {
+      background: #f0f6fc;
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      font-size: 13px;
+      color: #1a2b3c;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+      border: 1px solid #dce5ef;
+    }
+    .logic-box .turnstile {
+      color: #6b8aa8;
+      font-weight: 300;
+      padding: 0 6px;
+    }
+
+    /* ----- Placeholder / Loading / Error ----- */
+    .placeholder {
+      color: #8aaec9;
+      font-size: 14px;
+      text-align: center;
+      padding: 32px 0;
+    }
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 24px 0;
+      color: #3b7bb7;
+    }
+    .spinner {
+      width: 22px;
+      height: 22px;
+      border: 3px solid #dce5ef;
+      border-top: 3px solid #3b7bb7;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .error {
+      background: #fdf0f0;
+      color: #7a2e2e;
+      padding: 14px 18px;
+      border-radius: 12px;
+      border: 1px solid #f0d4d4;
+      font-size: 14px;
+    }
+
+    /* ----- Utility ----- */
+    .mt-2 { margin-top: 8px; }
+    .text-muted { color: #6b8aa8; font-size: 13px; }
+    .hint {
+      text-align: center;
+      color: #8aaec9;
+      font-size: 13px;
+      margin-top: 20px;
+      padding: 10px 0;
+      border-top: 1px solid #e6edf5;
+    }
+    .hint kbd {
+      background: #e6edf5;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-family: 'Inter', monospace;
+      font-size: 12px;
+      color: #0b2a4a;
+      border: 1px solid #d0dce8;
+    }
   </style>
 </head>
 <body>
-  <h1>🔍 Logic Pollice</h1>
-  <div class="subtitle">Thumbs up/down for arguments</div>
-  <div id="content">
-    <div class="status">Highlight text and press <kbd>Ctrl+Shift+Y</kbd>.</div>
+  <div class="app-header">
+    <span class="logo">⚖️</span>
+    <span class="title">Logic<span>Pollice</span></span>
+    <span class="version">v3</span>
   </div>
+
+  <div id="content">
+    <div class="placeholder">Highlight text and press <kbd>Ctrl+Shift+Y</kbd></div>
+  </div>
+
   <script src="sidebar.js"></script>
 </body>
 </html>
