@@ -15,7 +15,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ error: `Text too long (${text.length} chars). Max is 15000.` });
         return;
       }
-      fetch('http://localhost:8000/deconstruct', {
+      fetch('https://logic-police.onrender.com/deconstruct', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: text })

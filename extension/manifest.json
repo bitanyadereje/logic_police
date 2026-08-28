@@ -4,7 +4,10 @@
   "version": "3.0",
   "description": "Check deductive validity of arguments.",
   "permissions": ["activeTab", "sidePanel", "storage", "tabs"],
-  "host_permissions": ["http://localhost:8000/*"],
+  "host_permissions": [
+  "http://localhost:8000/*",
+  "https://logic-police.onrender.com/*"
+  ],
   "background": {"service_worker": "background.js"},
   "content_scripts": [{"matches": ["<all_urls>"], "js": ["content.js"]}],
   "side_panel": {"default_path": "sidebar.html"},
