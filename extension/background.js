@@ -10,8 +10,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return;
       }
       const text = response.text;
-      if (text.length > 5000) {
-        sendResponse({ error: 'Text too long (max 5000 chars).' });
+      // --- INCREASED LIMIT to 15000 chars ---
+      if (text.length > 15000) {
+        sendResponse({ error: `Text too long (${text.length} chars). Max is 15000.` });
         return;
       }
       fetch('http://localhost:8000/deconstruct', {

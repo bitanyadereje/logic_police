@@ -48,52 +48,89 @@ def extract_arguments(text: str) -> dict:
 
     n = len(sentences)
 
-    conclusion_indicators = [
-        "therefore", "so", "thus", "hence", "consequently",
-        "as a result", "the key is", "we should", "we must",
-        "the evidence shows", "ultimately", "in conclusion",
-        "the point is", "my argument is", "i conclude"
-    ]
+    # ---- 1. Score each sentence as a potential conclusion ----
     conclusion_scores = []
     for i, sent in enumerate(sentences):
         lower = sent.lower()
         score = 0.0
-        for word in conclusion_indicators:
-            if word in lower:
-                score += 1.5
+
+        # ---- Penalise rhetorical patterns ----
+        # Skip quotations
+        if '"' in sent or "'" in sent or "“" in sent or "”" in sent:
+            score -= 3.0
+
+        # Skip sentences that start with "However"
+        if lower.startswith("however"):
+            score -= 2.0
+
+        # Skip sentences with "good news" / "bad news"
+        if "good news" in lower or "bad news" in lower:
+            score -= 2.0
+
+        # ---- Bonus: substantive claims ----
+        if re.search(r"\b(can reclaim|is possible|is essential|is necessary|is clear|the evidence shows|research shows|studies show)\b", lower):
+            score += 2.5
+
+        # Bonus for "should" / "must" / "need to"
+        if re.search(r"\b(should|must|ought to|need to)\b", lower):
+            score += 2.0
+
+        # Bonus for strong thesis phrases
+        if re.search(r"\b(the key is|the point is|my argument is|i conclude|ultimately)\b", lower):
+            score += 2.0
+
+        # ---- Position: last 30% get a bonus ----
         if i >= 0.7 * n:
             score += 0.8
-        if len(sent.split()) <= 15:
-            score += 0.3
-        if any(lower.startswith(w) for w in ["therefore", "so", "thus", "hence"]):
-            score += 1.0
+
+        # ---- Length: prefer 10–25 word conclusions ----
+        word_count = len(sent.split())
+        if 10 <= word_count <= 25:
+            score += 0.5
+        elif word_count < 6:
+            score -= 1.0
+
+        # ---- Penalise sentences that are too short or clearly filler ----
+        if word_count < 4:
+            score -= 2.0
+
         conclusion_scores.append((i, sent, score))
 
+    # ---- 2. Find the best conclusion ----
     conclusion_scores.sort(key=lambda x: x[2], reverse=True)
     best_conc = conclusion_scores[0] if conclusion_scores else None
 
     if not best_conc or best_conc[2] < 0.5:
-        conclusion = sentences[-1]
-        premise_indices = list(range(n - 1))
-        conclusion_idx = n - 1  # <--- FIX: set conclusion_idx here
+        # Fallback: pick the last sentence that's not a quote and has > 6 words
+        for i in range(n - 1, -1, -1):
+            sent = sentences[i]
+            if len(sent.split()) > 6 and '"' not in sent and "'" not in sent and "“" not in sent:
+                conclusion = sent
+                conclusion_idx = i
+                break
+        else:
+            conclusion = sentences[-1]
+            conclusion_idx = n - 1
     else:
         conclusion = best_conc[1]
         conclusion_idx = best_conc[0]
-        premise_indices = [i for i in range(n) if i != conclusion_idx]
 
+    premise_indices = [i for i in range(n) if i != conclusion_idx]
+
+    # ---- 3. Premise scoring ----
     premise_indicators = [
         "because", "since", "as", "given that",
         "for example", "for instance", "according to",
         "research", "study", "data", "evidence",
         "first", "second", "third", "finally",
+        "shows", "found", "reported", "revealed",
         "in addition", "moreover", "furthermore"
     ]
 
     fluff_indicators = [
-        "every week", "we hear about", "new breakthroughs", "advancing faster",
-        "with these advances", "companies like", "the technology is too powerful",
-        "should governments", "artificial intelligence is",
-        "i believe", "in my opinion", "the time for debate"
+        "good news", "bad news", "fun!", "what does the evidence say",
+        "let me tell you", "here's the thing", "the best", "the worst",
+        "meh", "great | good | meh"
     ]
 
     premise_scores = []
@@ -101,6 +138,7 @@ def extract_arguments(text: str) -> dict:
         sent = sentences[idx]
         lower = sent.lower()
 
+        # Skip fluff
         is_fluff = False
         for fluff in fluff_indicators:
             if fluff in lower:
@@ -116,8 +154,11 @@ def extract_arguments(text: str) -> dict:
 
         if re.search(r"\b\d+%?\b", sent):
             score += 2
-        if re.search(r"\b(study|research|data|evidence|report)\b", lower):
+        if re.search(r"\b(study|research|data|evidence|report|found|showed)\b", lower):
             score += 2
+        if re.search(r"\b(Microsoft|Cambridge|Harvard|Stanford|Oxford|Nature)\b", sent):
+            score += 3
+
         if len(sent.split()) < 4:
             score -= 1
 
@@ -128,18 +169,21 @@ def extract_arguments(text: str) -> dict:
     top_premises = premise_scores[:5]
 
     if not top_premises:
-        fallback_indices = [i for i in range(n) if i != conclusion_idx][:2]
+        fallback_indices = [i for i in range(n) if i != conclusion_idx and len(sentences[i].split()) > 5][:2]
         top_premises = [(i, sentences[i], 0) for i in fallback_indices]
 
     seen = set()
     final_premises = []
     for idx, sent, _ in top_premises:
-        if sent not in seen:
+        if sent not in seen and sent != conclusion:
             seen.add(sent)
             final_premises.append(sent)
 
-    if conclusion in final_premises:
-        final_premises.remove(conclusion)
+    if not final_premises:
+        for i, sent in enumerate(sentences):
+            if sent != conclusion and len(sent.split()) > 5 and i not in premise_indices:
+                final_premises.append(sent)
+                break
 
     return {"premises": final_premises, "conclusion": conclusion}
 # ------------------------------------------------------------------
