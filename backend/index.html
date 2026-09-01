@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Logic Pollice — Argument Validator</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <style>
+    /* ============================================================
+       TOKENS — from your elegant extension theme
+       ============================================================ */
+    :root {
+      --bg:            #f5f6fa;
+      --paper:         #ffffff;
+      --paper-ruled:   #eef0f6;
+      --ink:           #1a2332;
+      --ink-soft:      #5a6478;
+      --rule:          #d8dce6;
+
+      --navy:          #1a3a5c;
+      --navy-soft:     #4a90d9;
+      --gold:          #d4a373;
+      --gold-deep:     #b8813f;
+
+      --valid:         #2d7a4b;
+      --invalid:       #b13e3e;
+
+      --shadow-1:      0 1px 2px rgba(26,58,92,0.06), 0 1px 1px rgba(26,58,92,0.04);
+      --shadow-2:      0 6px 16px rgba(26,58,92,0.10), 0 2px 4px rgba(26,58,92,0.06);
+
+      --font-sans:  'Inter', system-ui, sans-serif;
+      --font-serif: 'Source Serif 4', Georgia, serif;
+      --font-mono:  'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+
+      --radius-s: 6px;
+      --radius-m: 10px;
+      --radius-l: 14px;
+
+      color-scheme: light;
+    }
+
+    body.dark {
+      --bg:            #161d2b;
+      --paper:         #1e2739;
+      --paper-ruled:   #232e44;
+      --ink:           #eef1f7;
+      --ink-soft:      #9aa4bd;
+      --rule:          #303c56;
+
+      --navy:          #4a90d9;
+      --navy-soft:     #6fa8e0;
+      --gold:          #e0b689;
+      --gold-deep:     #d4a373;
+
+      --shadow-1:      0 1px 2px rgba(0,0,0,0.25);
+      --shadow-2:      0 8px 20px rgba(0,0,0,0.35);
+      color-scheme: dark;
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0;
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--font-sans);
+      -webkit-font-smoothing: antialiased;
+    }
+    body {
+      transition: background 0.35s ease, color 0.35s ease;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    button { font-family: inherit; }
+    :focus-visible { outline: 2px solid var(--navy-soft); outline-offset: 2px; border-radius: 4px; }
+
+    /* ─── Container ─── */
+    .container {
+      max-width: 720px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* ─── Paper texture ─── */
+    .paper-texture {
+      position: fixed; inset: 0; pointer-events: none; z-index: 0;
+      background-image: repeating-linear-gradient(
+        to bottom, transparent 0 27px, var(--paper-ruled) 27px 28px
+      );
+      opacity: 0.35;
+      mask-image: linear-gradient(to bottom, transparent, black 120px);
+    }
+
+    /* ─── HEADER ─── */
+    header {
+      position: relative; z-index: 1;
+      display: flex; align-items: center; gap: 10px;
+      padding: 16px 18px 14px;
+      border-bottom: 1px solid var(--rule);
+      background: var(--paper);
+      border-radius: var(--radius-l) var(--radius-l) 0 0;
+    }
+    .emblem {
+      width: 34px; height: 34px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      background: radial-gradient(circle at 32% 28%, var(--navy-soft), var(--navy) 70%);
+      color: var(--gold);
+      font-size: 16px;
+      box-shadow: inset 0 0 0 1px rgba(212,163,115,0.5), var(--shadow-1);
+      flex-shrink: 0;
+    }
+    .brand { flex: 1; min-width: 0; }
+    .brand .name {
+      font-family: var(--font-serif);
+      font-weight: 700;
+      font-size: 16.5px;
+      letter-spacing: 0.2px;
+      line-height: 1.1;
+      color: var(--ink);
+    }
+    .brand .tag {
+      font-size: 10.5px;
+      color: var(--ink-soft);
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+
+    .theme-toggle {
+      width: 44px; height: 24px; border-radius: 999px;
+      border: 1px solid var(--rule);
+      background: var(--paper-ruled);
+      position: relative; cursor: pointer;
+      flex-shrink: 0;
+      transition: background 0.3s ease, border-color 0.3s ease;
+    }
+    .theme-toggle .knob {
+      position: absolute; top: 2px; left: 2px;
+      width: 18px; height: 18px; border-radius: 50%;
+      background: linear-gradient(160deg, var(--gold), var(--gold-deep));
+      box-shadow: var(--shadow-1);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px;
+      transition: transform 0.32s cubic-bezier(.65,-0.15,.35,1.15);
+    }
+    body.dark .theme-toggle .knob { transform: translateX(20px); }
+    .theme-toggle .icon-sun, .theme-toggle .icon-moon {
+      position: absolute; top: 50%; transform: translateY(-50%);
+      font-size: 11px; opacity: 0.55;
+    }
+    .theme-toggle .icon-sun { left: 5px; }
+    .theme-toggle .icon-moon { right: 5px; }
+
+    /* ─── MAIN ─── */
+    main {
+      position: relative; z-index: 1;
+      flex: 1;
+      padding: 16px;
+      display: flex; flex-direction: column;
+      gap: 14px;
+      background: var(--paper);
+      border-radius: 0 0 var(--radius-l) var(--radius-l);
+      border: 1px solid var(--rule);
+      border-top: none;
+    }
+
+    /* ─── Input area ─── */
+    .input-area textarea {
+      width: 100%;
+      padding: 14px 16px;
+      border: 1px solid var(--rule);
+      border-radius: var(--radius-s);
+      font-size: 14px;
+      font-family: var(--font-sans);
+      resize: vertical;
+      min-height: 100px;
+      background: var(--bg);
+      color: var(--ink);
+      transition: border-color 0.2s;
+      line-height: 1.6;
+    }
+    .input-area textarea:focus {
+      outline: none;
+      border-color: var(--navy-soft);
+      box-shadow: 0 0 0 3px rgba(74,144,217,0.12);
+    }
+    .input-row {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+    .btn {
+      background: var(--navy);
+      color: #fff;
+      border: none;
+      padding: 8px 24px;
+      border-radius: 40px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn:hover { background: var(--navy-soft); }
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* ─── Verdict: wax seal ─── */
+    .verdict-wrap {
+      display: flex; align-items: center; gap: 14px;
+      padding: 14px 16px;
+      background: var(--paper);
+      border: 1px solid var(--rule);
+      border-radius: var(--radius-l);
+      box-shadow: var(--shadow-1);
+    }
+    .seal {
+      width: 52px; height: 52px; border-radius: 50%;
+      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; color: #fff;
+      position: relative;
+      transform: scale(0) rotate(-18deg);
+      opacity: 0;
+    }
+    .seal.stamp-in {
+      animation: stampIn 0.55s cubic-bezier(.2,1.4,.4,1) forwards;
+    }
+    @keyframes stampIn {
+      0% { transform: scale(0.3) rotate(-24deg); opacity: 0; }
+      55% { transform: scale(1.12) rotate(4deg); opacity: 1; }
+      75% { transform: scale(0.96) rotate(-2deg); }
+      100% { transform: scale(1) rotate(0deg); opacity: 1; }
+    }
+    .seal::before {
+      content: ''; position: absolute; inset: -4px; border-radius: 50%;
+      border: 1.5px dashed currentColor; opacity: 0.35;
+    }
+    .seal.valid { background: radial-gradient(circle at 30% 25%, #3f9762, var(--valid) 75%); color: var(--valid); }
+    .seal.invalid { background: radial-gradient(circle at 30% 25%, #cf5b5b, var(--invalid) 75%); color: var(--invalid); }
+    .seal .mark { color: #fdf9f2; z-index: 1; }
+
+    .verdict-text .label {
+      font-family: var(--font-serif);
+      font-weight: 700;
+      font-size: 17px;
+    }
+    .verdict-text .label.valid { color: var(--valid); }
+    .verdict-text .label.invalid { color: var(--invalid); }
+    .verdict-text .sub {
+      font-size: 11.5px; color: var(--ink-soft);
+      margin-top: 2px;
+    }
+    .verdict-text .why-trigger {
+      background: none; border: none; padding: 0; margin-top: 4px;
+      font-size: 11px; color: var(--navy-soft); cursor: pointer;
+      text-decoration: underline dotted;
+      text-underline-offset: 2px;
+    }
+    .tooltip {
+      display: none;
+      margin-top: 8px;
+      font-size: 11.5px; line-height: 1.5;
+      color: var(--ink-soft);
+      background: var(--paper-ruled);
+      border-left: 2px solid var(--gold);
+      padding: 8px 10px;
+      border-radius: 0 6px 6px 0;
+    }
+    .tooltip.open { display: block; }
+
+    /* ─── Cards ─── */
+    .card {
+      background: var(--paper);
+      border: 1px solid var(--rule);
+      border-radius: var(--radius-m);
+      box-shadow: var(--shadow-1);
+      overflow: hidden;
+    }
+    .card-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--rule);
+    }
+    .card-head h2 {
+      margin: 0; font-size: 11px; font-weight: 600;
+      letter-spacing: 0.7px; text-transform: uppercase;
+      color: var(--ink-soft);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .card-head .count-pill {
+      font-size: 10px; color: var(--navy);
+      background: rgba(74,144,217,0.12);
+      border-radius: 999px; padding: 1px 7px;
+      font-weight: 600;
+    }
+    .premise-list {
+      list-style: none; margin: 0; padding: 4px 4px;
+    }
+    .premise-list li {
+      display: flex; gap: 10px;
+      padding: 9px 10px;
+      border-bottom: 1px solid var(--rule);
+      font-size: 13px; line-height: 1.45;
+    }
+    .premise-list li:last-child { border-bottom: none; }
+    .premise-list .num {
+      font-family: var(--font-mono);
+      font-size: 11px; color: var(--gold-deep);
+      flex-shrink: 0; padding-top: 1px;
+    }
+
+    .conclusion-card { padding: 14px 16px 14px 14px; border-left: 3px solid var(--gold); }
+    .conclusion-card .eyebrow {
+      font-size: 10.5px; font-weight: 600; letter-spacing: 0.6px; text-transform: uppercase;
+      color: var(--gold-deep); margin-bottom: 4px;
+    }
+    .conclusion-card p {
+      margin: 0; font-family: var(--font-serif);
+      font-size: 15.5px; line-height: 1.5; color: var(--ink);
+    }
+
+    .formal-body { padding: 12px 14px; }
+    .formal-line {
+      display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+      font-family: var(--font-mono);
+      font-size: 12.5px; color: var(--ink);
+      background: var(--paper-ruled);
+      border-radius: var(--radius-s);
+      padding: 10px 12px;
+      line-height: 1.6;
+    }
+    .formal-line .turnstile { color: var(--navy); font-weight: 600; padding: 0 2px; }
+    .formal-line .premise-token { color: var(--ink-soft); }
+    .formal-line .premise-token:not(:last-of-type)::after { content: ','; color: var(--ink-soft); margin-right: 2px; }
+    .copy-btn {
+      display: flex; align-items: center; gap: 5px;
+      margin-top: 9px;
+      background: var(--paper); border: 1px solid var(--rule);
+      border-radius: var(--radius-s);
+      padding: 5px 10px;
+      font-size: 11px; color: var(--ink-soft); cursor: pointer;
+      transition: border-color 0.2s ease, color 0.2s ease;
+    }
+    .copy-btn:hover { border-color: var(--navy-soft); color: var(--navy); }
+    .copy-btn.copied { color: var(--valid); border-color: var(--valid); }
+
+    /* ─── Loading ─── */
+    .loading-state {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 14px; padding: 44px 20px; text-align: center;
+    }
+    .ink-draw {
+      width: 120px; height: 2px; background: var(--rule); border-radius: 2px; position: relative; overflow: hidden;
+    }
+    .ink-draw::after {
+      content: ''; position: absolute; top: 0; left: -40%; width: 40%; height: 100%;
+      background: linear-gradient(90deg, transparent, var(--navy-soft), transparent);
+      animation: inkTravel 1.3s ease-in-out infinite;
+    }
+    @keyframes inkTravel {
+      0% { left: -40%; }
+      100% { left: 100%; }
+    }
+    .loading-state .msg { font-size: 12.5px; color: var(--ink-soft); }
+
+    /* ─── Error ─── */
+    .error-state {
+      display: flex; flex-direction: column; align-items: center; text-align: center;
+      gap: 8px; padding: 40px 24px;
+      color: var(--ink-soft);
+    }
+    .error-state .glyph {
+      width: 40px; height: 40px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(177,62,62,0.1); color: var(--invalid);
+      font-size: 17px;
+    }
+    .error-state h3 { margin: 2px 0 0; font-size: 13.5px; color: var(--ink); font-weight: 600; }
+    .error-state p { margin: 0; font-size: 12px; max-width: 230px; line-height: 1.5; }
+    .retry-btn {
+      margin-top: 6px;
+      background: var(--navy); color: #fdf9f2; border: none;
+      border-radius: var(--radius-s); padding: 7px 16px;
+      font-size: 12px; font-weight: 500; cursor: pointer;
+    }
+
+    .hidden { display: none !important; }
+    .status-msg {
+      color: var(--ink-soft);
+      font-size: 14px;
+      padding: 12px 0;
+      text-align: center;
+    }
+
+    /* ─── Footer ─── */
+    footer {
+      position: relative; z-index: 1;
+      margin-top: auto;
+      padding: 10px 16px 14px;
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+      font-size: 10.5px; color: var(--ink-soft);
+      border-top: 1px solid var(--rule);
+      background: var(--paper);
+      border-radius: 0 0 var(--radius-l) var(--radius-l);
+    }
+    footer kbd {
+      font-family: var(--font-mono); font-size: 10px;
+      background: var(--paper-ruled); border: 1px solid var(--rule);
+      border-bottom-width: 2px;
+      padding: 1.5px 5px; border-radius: 4px; color: var(--ink);
+    }
+
+    /* ─── Responsive ─── */
+    @media (max-width: 480px) {
+      body { padding: 10px; }
+      .container { max-width: 100%; }
+      .input-row { flex-direction: column; }
+      .btn { width: 100%; justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="paper-texture"></div>
+<div class="container">
+
+  <header>
+    <div class="emblem">⚖</div>
+    <div class="brand">
+      <div class="name">Logic Pollice</div>
+      <div class="tag">Web · Argument Validator</div>
+    </div>
+    <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode" aria-pressed="false">
+      <span class="icon-sun">☀</span>
+      <span class="icon-moon">☾</span>
+      <span class="knob"></span>
+    </button>
+  </header>
+
+  <main id="main">
+
+    <!-- INPUT AREA -->
+    <div class="input-area">
+      <textarea id="inputText" placeholder="Paste an argument, essay, or opinion piece here…&#10;Example: All humans are mortal. Socrates is human. Therefore, Socrates is mortal."></textarea>
+      <div class="input-row">
+        <button class="btn" id="analyzeBtn">🔍 Analyze Argument</button>
+        <button class="btn" id="clearBtn" style="background:var(--ink-soft);">Clear</button>
+      </div>
+    </div>
+
+    <!-- LOADING STATE -->
+    <div class="loading-state hidden" id="loadingState">
+      <div class="ink-draw"></div>
+      <div class="msg"><span class="quill">🖋</span>&nbsp; Parsing the argument…</div>
+    </div>
+
+    <!-- ERROR STATE -->
+    <div class="error-state hidden" id="errorState">
+      <div class="glyph">!</div>
+      <h3>Couldn't parse that argument</h3>
+      <p id="errorMessage">The extraction step didn't return a usable set of premises.</p>
+      <button class="retry-btn" id="retryBtn">Try again</button>
+    </div>
+
+    <!-- EMPTY STATE -->
+    <div class="empty-state hidden" id="emptyState">
+      <div class="glyph">⚖</div>
+      <p>Paste an argument above, then click <strong>Analyze Argument</strong>.</p>
+    </div>
+
+    <!-- RESULT STATE -->
+    <div id="resultState" class="hidden">
+      <div class="verdict-wrap">
+        <div class="seal" id="seal"><span class="mark" id="sealMark"></span></div>
+        <div class="verdict-text">
+          <div class="label" id="verdictLabel"></div>
+          <div class="sub" id="verdictSub"></div>
+          <button class="why-trigger" id="whyTrigger">why?</button>
+          <div class="tooltip" id="tooltip"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>📋 Premises <span class="count-pill" id="premiseCount">0</span></h2>
+        </div>
+        <ul class="premise-list" id="premiseList"></ul>
+      </div>
+
+      <div class="card conclusion-card">
+        <div class="eyebrow">🎯 Conclusion</div>
+        <p id="conclusionText"></p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>🔢 Formal Logic</h2></div>
+        <div class="formal-body">
+          <div class="formal-line" id="formalLine"></div>
+          <button class="copy-btn" id="copyBtn">
+            <span id="copyIcon">⧉</span> <span id="copyLabel">Copy</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <footer>
+    Powered by SymPy · Backend live on Render
+  </footer>
+</div>
+
+<script>
+  // ────────────────────────────────────────────────────────────────────
+  // Dark mode persistence (localStorage)
+  // ────────────────────────────────────────────────────────────────────
+  (function initTheme() {
+    const dark = localStorage.getItem('logicPolliceDark') === 'true';
+    if (dark) document.body.classList.add('dark');
+    document.getElementById('themeToggle').setAttribute('aria-pressed', String(dark));
+  })();
+
+  document.getElementById('themeToggle').addEventListener('click', function() {
+    const isDark = document.body.classList.toggle('dark');
+    localStorage.setItem('logicPolliceDark', isDark);
+    this.setAttribute('aria-pressed', String(isDark));
+  });
+
+  // ────────────────────────────────────────────────────────────────────
+  // DOM refs
+  // ────────────────────────────────────────────────────────────────────
+  const inputText = document.getElementById('inputText');
+  const analyzeBtn = document.getElementById('analyzeBtn');
+  const clearBtn = document.getElementById('clearBtn');
+  const retryBtn = document.getElementById('retryBtn');
+
+  const loadingState = document.getElementById('loadingState');
+  const errorState = document.getElementById('errorState');
+  const emptyState = document.getElementById('emptyState');
+  const resultState = document.getElementById('resultState');
+
+  const errorMessage = document.getElementById('errorMessage');
+  const seal = document.getElementById('seal');
+  const sealMark = document.getElementById('sealMark');
+  const verdictLabel = document.getElementById('verdictLabel');
+  const verdictSub = document.getElementById('verdictSub');
+  const whyTrigger = document.getElementById('whyTrigger');
+  const tooltip = document.getElementById('tooltip');
+  const premiseCount = document.getElementById('premiseCount');
+  const premiseList = document.getElementById('premiseList');
+  const conclusionText = document.getElementById('conclusionText');
+  const formalLine = document.getElementById('formalLine');
+  const copyBtn = document.getElementById('copyBtn');
+  const copyIcon = document.getElementById('copyIcon');
+  const copyLabel = document.getElementById('copyLabel');
+
+  const API_URL = 'https://logic-police.onrender.com/deconstruct';
+
+  // ────────────────────────────────────────────────────────────────────
+  // State helpers
+  // ────────────────────────────────────────────────────────────────────
+  function hideAllStates() {
+    [loadingState, errorState, emptyState, resultState].forEach(el => el.classList.add('hidden'));
+  }
+
+  function showState(stateEl) {
+    hideAllStates();
+    stateEl.classList.remove('hidden');
+  }
+
+  function renderLoading() {
+    showState(loadingState);
+    analyzeBtn.disabled = true;
+  }
+
+  function renderError(msg) {
+    errorMessage.textContent = msg || 'The extraction step didn\'t return a usable set of premises.';
+    showState(errorState);
+    analyzeBtn.disabled = false;
+  }
+
+  function renderEmpty() {
+    showState(emptyState);
+    analyzeBtn.disabled = false;
+  }
+
+  function whyText(valid, count) {
+    if (valid) {
+      return count <= 2
+        ? 'The conclusion follows necessarily from the premises — a classic two-premise syllogism.'
+        : 'Each premise chains into the next, and the conclusion follows necessarily from the full set.';
+    }
+    return 'The conclusion doesn\'t follow necessarily from the premises as stated — check for an unstated assumption or a shift in terms.';
+  }
+
+  // ────────────────────────────────────────────────────────────────────
+  // Render result
+  // ────────────────────────────────────────────────────────────────────
+  function renderResult(data) {
+    const { premises = [], conclusion = '', formal_premises = [], formal_conclusion = '', valid = false } = data;
+
+    // Seal
+    seal.classList.remove('stamp-in', 'valid', 'invalid');
+    void seal.offsetWidth;
+    seal.classList.add(valid ? 'valid' : 'invalid');
+    sealMark.textContent = valid ? '✓' : '✗';
+
+    verdictLabel.textContent = valid ? 'Valid' : 'Invalid';
+    verdictLabel.className = 'label ' + (valid ? 'valid' : 'invalid');
+    verdictSub.textContent = valid
+      ? 'The argument holds together.'
+      : 'The argument doesn\'t hold together.';
+
+    requestAnimationFrame(() => seal.classList.add('stamp-in'));
+
+    tooltip.textContent = whyText(valid, premises.length);
+    tooltip.classList.remove('open');
+
+    // Premises
+    premiseCount.textContent = String(premises.length);
+    premiseList.innerHTML = '';
+    premises.forEach((p, i) => {
+      const li = document.createElement('li');
+      const num = document.createElement('span');
+      num.className = 'num';
+      num.textContent = String(i + 1).padStart(2, '0');
+      const txt = document.createElement('span');
+      txt.textContent = p;
+      li.appendChild(num);
+      li.appendChild(txt);
+      premiseList.appendChild(li);
+    });
+
+    // Conclusion
+    conclusionText.textContent = conclusion || 'No conclusion identified.';
+
+    // Formal logic
+    formalLine.innerHTML = '';
+    formal_premises.forEach((fp) => {
+      const span = document.createElement('span');
+      span.className = 'premise-token';
+      span.textContent = fp;
+      formalLine.appendChild(span);
+    });
+    const turnstile = document.createElement('span');
+    turnstile.className = 'turnstile';
+    turnstile.textContent = '⊢';
+    formalLine.appendChild(turnstile);
+    const concl = document.createElement('span');
+    concl.textContent = formal_conclusion || 'P';
+    formalLine.appendChild(concl);
+
+    copyBtn.dataset.payload = formal_premises.join(', ') + ' ⊢ ' + (formal_conclusion || 'P');
+    copyBtn.classList.remove('copied');
+    copyIcon.textContent = '⧉';
+    copyLabel.textContent = 'Copy';
+
+    showState(resultState);
+    analyzeBtn.disabled = false;
+  }
+
+  // ────────────────────────────────────────────────────────────────────
+  // Main analyze function
+  // ────────────────────────────────────────────────────────────────────
+  async function analyzeText() {
+    const text = inputText.value.trim();
+    if (!text) {
+      renderError('Please paste some text to analyze.');
+      return;
+    }
+
+    renderLoading();
+
+    try {
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Server returned ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      renderResult(data);
+    } catch (err) {
+      console.error('Analysis error:', err);
+      renderError(`Could not reach the backend: ${err.message}`);
+    }
+  }
+
+  // ────────────────────────────────────────────────────────────────────
+  // Event listeners
+  // ────────────────────────────────────────────────────────────────────
+  analyzeBtn.addEventListener('click', analyzeText);
+
+  clearBtn.addEventListener('click', () => {
+    inputText.value = '';
+    renderEmpty();
+  });
+
+  retryBtn.addEventListener('click', analyzeText);
+
+  whyTrigger.addEventListener('click', () => {
+    tooltip.classList.toggle('open');
+  });
+
+  copyBtn.addEventListener('click', async () => {
+    const payload = copyBtn.dataset.payload || '';
+    try {
+      await navigator.clipboard.writeText(payload);
+      copyBtn.classList.add('copied');
+      copyIcon.textContent = '✓';
+      copyLabel.textContent = 'Copied';
+      setTimeout(() => {
+        copyBtn.classList.remove('copied');
+        copyIcon.textContent = '⧉';
+        copyLabel.textContent = 'Copy';
+      }, 1600);
+    } catch {
+      copyLabel.textContent = 'Copy failed';
+    }
+  });
+
+  // Ctrl+Enter to analyze
+  inputText.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      analyzeText();
+    }
+  });
+
+  // Initial state
+  renderEmpty();
+
+  // If there's text pre-filled (e.g., from the placeholder), auto-analyze?
+  // No — let the user click the button.
+</script>
+</body>
+</html>

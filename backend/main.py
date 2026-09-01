@@ -1,11 +1,17 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sympy import symbols, And, Not, satisfiable
 from sympy.parsing.sympy_parser import parse_expr
 import re
 import string
+import os
 
+# ------------------------------------------------------------------
+# 1. FastAPI App Setup with Static File Serving
+# ------------------------------------------------------------------
 app = FastAPI()
 
 app.add_middleware(
@@ -15,11 +21,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Serve static files (CSS, JS if you split them — but we keep it all in one index.html)
+# Mount the current directory so the static files can be served
+app.mount("/static", StaticFiles(directory="."), name="static")
+
+# ------------------------------------------------------------------
+# 2. Serve the Web App at the Root URL
+# ------------------------------------------------------------------
+@app.get("/")
+async def serve_index():
+    """Serve the index.html web app."""
+    return FileResponse("index.html")
+
+# ------------------------------------------------------------------
+# 3. API Models
+# ------------------------------------------------------------------
 class DeconstructRequest(BaseModel):
     text: str
 
 # ------------------------------------------------------------------
-# 1. HEURISTIC EXTRACTION (Your Existing Working Code)
+# 4. HEURISTIC EXTRACTION
 # ------------------------------------------------------------------
 def clean_text(text: str) -> str:
     text = text.lower()
@@ -176,7 +197,7 @@ def extract_arguments(text: str) -> dict:
     return {"premises": final_premises, "conclusion": conclusion}
 
 # ------------------------------------------------------------------
-# 2. FALLACY DETECTION (Simple Keyword Patterns)
+# 5. FALLACY DETECTION (Keyword Patterns)
 # ------------------------------------------------------------------
 def detect_fallacies(premises: list, conclusion: str) -> list[dict]:
     text = " ".join(premises + [conclusion]).lower()
@@ -201,10 +222,9 @@ def detect_fallacies(premises: list, conclusion: str) -> list[dict]:
                 "fallacy_name": fallacy.title(),
                 "explanation": f"Detected based on keywords: {', '.join(keywords)}"
             })
-            break  # Return the first found to avoid over‑detection
+            break
 
     if not fallacies:
-        # Hardcoded for "politician" example
         if "politician" in text and ("trust" in text or "believe" in text):
             fallacies.append({
                 "fallacy_name": "Ad Hominem",
@@ -214,7 +234,7 @@ def detect_fallacies(premises: list, conclusion: str) -> list[dict]:
     return fallacies
 
 # ------------------------------------------------------------------
-# 3. FORMAL LOGIC TRANSLATION
+# 6. FORMAL LOGIC TRANSLATION
 # ------------------------------------------------------------------
 def translate_to_formal(premises: list, conclusion: str) -> dict:
     var_map = {}
@@ -263,7 +283,7 @@ def translate_to_formal(premises: list, conclusion: str) -> dict:
     }
 
 # ------------------------------------------------------------------
-# 4. SYLLOGISM DETECTION
+# 7. SYLLOGISM DETECTION
 # ------------------------------------------------------------------
 def syllogism_detection(premises: list, conclusion: str) -> bool:
     prem_text = clean_text(" ".join(premises))
@@ -304,7 +324,7 @@ def syllogism_detection(premises: list, conclusion: str) -> bool:
     return False
 
 # ------------------------------------------------------------------
-# 5. SYMPY CHECK
+# 8. SYMPY CHECK
 # ------------------------------------------------------------------
 def check_with_sympy(formal_premises: list, formal_conclusion: str, var_map: dict) -> bool:
     try:
@@ -317,22 +337,19 @@ def check_with_sympy(formal_premises: list, formal_conclusion: str, var_map: dic
         return False
 
 # ------------------------------------------------------------------
-# 6. MAIN ANALYSIS PIPELINE
+# 9. MAIN ANALYSIS PIPELINE
 # ------------------------------------------------------------------
 def analyze_argument(text: str) -> dict:
-    # Extract using heuristic (always works)
     extracted = extract_arguments(text)
     premises = extracted["premises"]
     conclusion = extracted["conclusion"]
 
-    # Formalize and check validity
     formal = translate_to_formal(premises, conclusion)
     if syllogism_detection(premises, conclusion):
         is_valid = True
     else:
         is_valid = check_with_sympy(formal["formal_premises"], formal["formal_conclusion"], formal["var_map"])
 
-    # Fallacies (keyword-based)
     fallacies = detect_fallacies(premises, conclusion)
 
     return {
@@ -345,19 +362,12 @@ def analyze_argument(text: str) -> dict:
     }
 
 # ------------------------------------------------------------------
-# 7. API ENDPOINTS
+# 10. API ENDPOINTS
 # ------------------------------------------------------------------
 @app.post("/deconstruct")
 def deconstruct(request: DeconstructRequest):
     return analyze_argument(request.text)
 
-@app.get("/")
-def root():
-    return {"status": "Logic Pollice v6.0 — Pure Heuristics + Keyword Fallacies"}
-
-# ------------------------------------------------------------------
-# TEST ENDPOINT: Fallacy Detection Only
-# ------------------------------------------------------------------
 @app.post("/test_fallacies")
 def test_fallacies(request: DeconstructRequest):
     extracted = extract_arguments(request.text)
