@@ -404,6 +404,30 @@
       border-left: 2px solid var(--accent);
     }
 
+    .fallacy-list { margin: 0; }
+    .fallacy-item {
+      padding: 12px 0;
+      border-top: 1px solid var(--rule);
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--ink);
+    }
+    .fallacy-item:first-child { border-top: none; }
+    .fallacy-item .fallacy-name {
+      display: block;
+      font-family: var(--font-serif);
+      font-weight: 600;
+      font-size: 14.5px;
+      color: var(--accent);
+      margin-bottom: 3px;
+    }
+    .fallacy-item .fallacy-explanation { color: var(--ink-soft); }
+    .fallacy-empty {
+      font-size: 13.5px;
+      color: var(--ink-faint);
+      font-style: italic;
+    }
+
     .formal-line {
       display: flex; align-items: center; flex-wrap: wrap; gap: 7px;
       font-family: var(--font-mono);
@@ -539,8 +563,16 @@
         </div>
       </section>
 
-      <section class="report-section">
+      <section class="report-section" id="fallacyCard">
         <div class="section-num">02</div>
+        <div class="section-body">
+          <h2 class="section-title">Fallacy Analysis</h2>
+          <div class="fallacy-list" id="fallacyList"></div>
+        </div>
+      </section>
+
+      <section class="report-section">
+        <div class="section-num">03</div>
         <div class="section-body">
           <h2 class="section-title">Deductive Validity</h2>
           <div class="formal-line" id="formalLine"></div>
@@ -602,6 +634,8 @@
   const copyBtn = document.getElementById('copyBtn');
   const copyIcon = document.getElementById('copyIcon');
   const copyLabel = document.getElementById('copyLabel');
+  const fallacyList = document.getElementById('fallacyList');
+  const fallacyCard = document.getElementById('fallacyCard');
 
   const API_URL = 'https://logic-police.onrender.com/deconstruct';
 
@@ -646,7 +680,7 @@
   // Render result
   // ────────────────────────────────────────────────────────────────────
   function renderResult(data) {
-    const { premises = [], conclusion = '', formal_premises = [], formal_conclusion = '', valid = false } = data;
+    const { premises = [], conclusion = '', formal_premises = [], formal_conclusion = '', valid = false, fallacies = [] } = data;
 
     // Seal
     seal.classList.remove('stamp-in', 'valid', 'invalid');
@@ -682,6 +716,29 @@
 
     // Conclusion
     conclusionText.textContent = conclusion || 'No conclusion identified.';
+
+    // Fallacies
+    fallacyList.innerHTML = '';
+    if (fallacies && fallacies.length > 0) {
+      fallacies.forEach(f => {
+        const item = document.createElement('div');
+        item.className = 'fallacy-item';
+        const name = document.createElement('span');
+        name.className = 'fallacy-name';
+        name.textContent = f.fallacy_name || f.fallacy || 'Fallacy';
+        const explanation = document.createElement('span');
+        explanation.className = 'fallacy-explanation';
+        explanation.textContent = f.explanation || 'No explanation provided.';
+        item.appendChild(name);
+        item.appendChild(explanation);
+        fallacyList.appendChild(item);
+      });
+    } else {
+      const empty = document.createElement('div');
+      empty.className = 'fallacy-empty';
+      empty.textContent = 'No logical fallacies detected.';
+      fallacyList.appendChild(empty);
+    }
 
     // Formal logic
     formalLine.innerHTML = '';
