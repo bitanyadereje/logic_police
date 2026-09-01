@@ -177,7 +177,10 @@
       line-height: 1.7;
       padding: 18px 16px;
       min-height: 150px;
-      resize: vertical;
+      max-height: 60vh;
+      resize: none;
+      overflow-y: hidden;
+      transition: height 0.1s ease;
     }
     #inputText:focus { outline: none; }
     #inputText::placeholder { color: var(--ink-faint); font-style: italic; }
@@ -744,6 +747,7 @@
 
   clearBtn.addEventListener('click', () => {
     inputText.value = '';
+    inputText.style.height = 'auto';
     renderEmpty();
   });
 
@@ -777,6 +781,13 @@
       analyzeText();
     }
   });
+
+  // Auto-expand the textarea as the user types
+  function autoResize() {
+    inputText.style.height = 'auto';
+    inputText.style.height = inputText.scrollHeight + 'px';
+  }
+  inputText.addEventListener('input', autoResize);
 
   // Initial state
   renderEmpty();
