@@ -2,3 +2,5 @@
 uvicorn
 sympy
 python-multipart
+instructor
+ollama

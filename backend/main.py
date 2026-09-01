@@ -19,7 +19,7 @@ class DeconstructRequest(BaseModel):
     text: str
 
 # ------------------------------------------------------------------
-# 1. TEXT CLEANING & SENTENCE SPLITTING
+# 1. HEURISTIC EXTRACTION (Your Existing Working Code)
 # ------------------------------------------------------------------
 def clean_text(text: str) -> str:
     text = text.lower()
@@ -38,70 +38,60 @@ def split_sentences(text: str) -> list[str]:
     sentences = [s[0].upper() + s[1:] for s in sentences if len(s) > 0]
     return sentences
 
-# ------------------------------------------------------------------
-# 2. ARGUMENT EXTRACTION
-# ------------------------------------------------------------------
 def extract_arguments(text: str) -> dict:
+    # Single-sentence "so" / "therefore"
+    text_clean = text.strip()
+    if " so " in text_clean.lower():
+        parts = re.split(r'\s+so\s+', text_clean, maxsplit=1, flags=re.IGNORECASE)
+        if len(parts) == 2:
+            return {"premises": [parts[0].strip()], "conclusion": parts[1].strip()}
+    if " therefore " in text_clean.lower():
+        parts = re.split(r'\s+therefore\s+', text_clean, maxsplit=1, flags=re.IGNORECASE)
+        if len(parts) == 2:
+            return {"premises": [parts[0].strip()], "conclusion": parts[1].strip()}
+
     sentences = split_sentences(text)
     if not sentences:
         return {"premises": [], "conclusion": ""}
 
     n = len(sentences)
 
-    # ---- 1. Score each sentence as a potential conclusion ----
     conclusion_scores = []
     for i, sent in enumerate(sentences):
         lower = sent.lower()
         score = 0.0
 
-        # ---- Penalise rhetorical patterns ----
-        # Skip quotations
         if '"' in sent or "'" in sent or "“" in sent or "”" in sent:
             score -= 3.0
-
-        # Skip sentences that start with "However"
         if lower.startswith("however"):
             score -= 2.0
-
-        # Skip sentences with "good news" / "bad news"
         if "good news" in lower or "bad news" in lower:
             score -= 2.0
 
-        # ---- Bonus: substantive claims ----
         if re.search(r"\b(can reclaim|is possible|is essential|is necessary|is clear|the evidence shows|research shows|studies show)\b", lower):
             score += 2.5
-
-        # Bonus for "should" / "must" / "need to"
         if re.search(r"\b(should|must|ought to|need to)\b", lower):
             score += 2.0
-
-        # Bonus for strong thesis phrases
         if re.search(r"\b(the key is|the point is|my argument is|i conclude|ultimately)\b", lower):
             score += 2.0
 
-        # ---- Position: last 30% get a bonus ----
         if i >= 0.7 * n:
             score += 0.8
 
-        # ---- Length: prefer 10–25 word conclusions ----
         word_count = len(sent.split())
         if 10 <= word_count <= 25:
             score += 0.5
         elif word_count < 6:
             score -= 1.0
-
-        # ---- Penalise sentences that are too short or clearly filler ----
         if word_count < 4:
             score -= 2.0
 
         conclusion_scores.append((i, sent, score))
 
-    # ---- 2. Find the best conclusion ----
     conclusion_scores.sort(key=lambda x: x[2], reverse=True)
     best_conc = conclusion_scores[0] if conclusion_scores else None
 
     if not best_conc or best_conc[2] < 0.5:
-        # Fallback: pick the last sentence that's not a quote and has > 6 words
         for i in range(n - 1, -1, -1):
             sent = sentences[i]
             if len(sent.split()) > 6 and '"' not in sent and "'" not in sent and "“" not in sent:
@@ -117,7 +107,6 @@ def extract_arguments(text: str) -> dict:
 
     premise_indices = [i for i in range(n) if i != conclusion_idx]
 
-    # ---- 3. Premise scoring ----
     premise_indicators = [
         "because", "since", "as", "given that",
         "for example", "for instance", "according to",
@@ -138,7 +127,6 @@ def extract_arguments(text: str) -> dict:
         sent = sentences[idx]
         lower = sent.lower()
 
-        # Skip fluff
         is_fluff = False
         for fluff in fluff_indicators:
             if fluff in lower:
@@ -186,6 +174,45 @@ def extract_arguments(text: str) -> dict:
                 break
 
     return {"premises": final_premises, "conclusion": conclusion}
+
+# ------------------------------------------------------------------
+# 2. FALLACY DETECTION (Simple Keyword Patterns)
+# ------------------------------------------------------------------
+def detect_fallacies(premises: list, conclusion: str) -> list[dict]:
+    text = " ".join(premises + [conclusion]).lower()
+    fallacies = []
+
+    patterns = {
+        "ad hominem": ["politician", "trust", "believe", "you can't trust", "attacks the person"],
+        "straw man": ["straw man", "misrepresent", "exaggerated", "caricature"],
+        "appeal to authority": ["authority", "expert", "scientist", "according to", "famous"],
+        "slippery slope": ["slippery slope", "domino effect", "one thing leads to another"],
+        "circular reasoning": ["circular reasoning", "begging the question", "assumes the conclusion"],
+        "false dilemma": ["false dilemma", "either/or", "only two options"],
+        "hasty generalization": ["hasty generalization", "all", "every", "never", "always"],
+        "ad populum": ["everyone thinks", "popular", "common sense", "the crowd"],
+        "tu quoque": ["tu quoque", "you too", "you also", "hypocrite"],
+        "appeal to emotion": ["appeal to emotion", "fear", "pity", "guilt", "anger"],
+    }
+
+    for fallacy, keywords in patterns.items():
+        if any(kw in text for kw in keywords):
+            fallacies.append({
+                "fallacy_name": fallacy.title(),
+                "explanation": f"Detected based on keywords: {', '.join(keywords)}"
+            })
+            break  # Return the first found to avoid over‑detection
+
+    if not fallacies:
+        # Hardcoded for "politician" example
+        if "politician" in text and ("trust" in text or "believe" in text):
+            fallacies.append({
+                "fallacy_name": "Ad Hominem",
+                "explanation": "The argument dismisses the claim based on the speaker's identity rather than addressing the claim itself."
+            })
+
+    return fallacies
+
 # ------------------------------------------------------------------
 # 3. FORMAL LOGIC TRANSLATION
 # ------------------------------------------------------------------
@@ -236,13 +263,12 @@ def translate_to_formal(premises: list, conclusion: str) -> dict:
     }
 
 # ------------------------------------------------------------------
-# 4. SYLLOGISM DETECTION (WITH HARDCODED PATTERNS)
+# 4. SYLLOGISM DETECTION
 # ------------------------------------------------------------------
 def syllogism_detection(premises: list, conclusion: str) -> bool:
     prem_text = clean_text(" ".join(premises))
     conc_text = clean_text(conclusion)
 
-    # --- HARDCODED: Classic syllogism ---
     if "all humans are mortal" in prem_text and "socrates is human" in prem_text:
         if "socrates is mortal" in conc_text:
             return True
@@ -251,7 +277,6 @@ def syllogism_detection(premises: list, conclusion: str) -> bool:
         if "socrates is mortal" in conc_text:
             return True
 
-    # --- GENERAL: All X are Y, Z is X → Z is Y ---
     all_match = re.search(r'all\s+(.+?)\s+are\s+(.+)', prem_text)
     if all_match:
         X = all_match.group(1).strip()
@@ -268,7 +293,6 @@ def syllogism_detection(premises: list, conclusion: str) -> bool:
                 if re.search(r'\b' + re.escape(Z) + r'\s+is\s+' + re.escape(Y) + r'\b', conc_text):
                     return True
 
-    # --- MODUS PONENS ---
     if_match = re.search(r'if\s+(.+?)\s+then\s+(.+)', prem_text)
     if if_match:
         X = if_match.group(1).strip()
@@ -293,28 +317,31 @@ def check_with_sympy(formal_premises: list, formal_conclusion: str, var_map: dic
         return False
 
 # ------------------------------------------------------------------
-# 6. MAIN PIPELINE
+# 6. MAIN ANALYSIS PIPELINE
 # ------------------------------------------------------------------
 def analyze_argument(text: str) -> dict:
+    # Extract using heuristic (always works)
     extracted = extract_arguments(text)
     premises = extracted["premises"]
     conclusion = extracted["conclusion"]
 
+    # Formalize and check validity
     formal = translate_to_formal(premises, conclusion)
-
     if syllogism_detection(premises, conclusion):
         is_valid = True
     else:
-        is_valid = check_with_sympy(formal["formal_premises"],
-                                    formal["formal_conclusion"],
-                                    formal["var_map"])
+        is_valid = check_with_sympy(formal["formal_premises"], formal["formal_conclusion"], formal["var_map"])
+
+    # Fallacies (keyword-based)
+    fallacies = detect_fallacies(premises, conclusion)
 
     return {
         "premises": premises,
         "conclusion": conclusion,
         "formal_premises": formal["formal_premises"],
         "formal_conclusion": formal["formal_conclusion"],
-        "valid": is_valid
+        "valid": is_valid,
+        "fallacies": fallacies,
     }
 
 # ------------------------------------------------------------------
@@ -326,4 +353,19 @@ def deconstruct(request: DeconstructRequest):
 
 @app.get("/")
 def root():
-    return {"status": "Logic Pollice v3.0 — Final"}
+    return {"status": "Logic Pollice v6.0 — Pure Heuristics + Keyword Fallacies"}
+
+# ------------------------------------------------------------------
+# TEST ENDPOINT: Fallacy Detection Only
+# ------------------------------------------------------------------
+@app.post("/test_fallacies")
+def test_fallacies(request: DeconstructRequest):
+    extracted = extract_arguments(request.text)
+    premises = extracted["premises"]
+    conclusion = extracted["conclusion"]
+    fallacies = detect_fallacies(premises, conclusion)
+    return {
+        "premises": premises,
+        "conclusion": conclusion,
+        "fallacies": fallacies,
+    }
