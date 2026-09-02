@@ -15,6 +15,19 @@ import os
 # ------------------------------------------------------------------
 from newspaper import Article
 
+# ------------------------------------------------------------------
+# NLTK for robust sentence splitting
+# ------------------------------------------------------------------
+import nltk
+from nltk.tokenize import sent_tokenize
+
+# Download the necessary model on startup (quietly)
+try:
+    nltk.download('punkt', quiet=True)
+    nltk.download('punkt_tab', quiet=True)
+except Exception:
+    pass  # Fallback if NLTK isn't installed yet
+
 app = FastAPI()
 
 app.add_middleware(
@@ -42,37 +55,37 @@ def clean_text(text: str) -> str:
     return ' '.join(text.split())
 
 def clean_article_text(text: str) -> str:
-    """
-    Clean article text: remove extra spaces, fix line breaks, normalize punctuation.
-    """
-    # Remove extra newlines and spaces
+    """Clean article text: remove extra spaces, fix line breaks."""
     text = re.sub(r'\n+', ' ', text)
     text = re.sub(r'\s+', ' ', text)
-    
-    # Fix common punctuation issues
     text = re.sub(r'\.\.\.', '...', text)
     text = re.sub(r'\s+\.', '.', text)
     text = re.sub(r'\.\s+\.', '..', text)
-    
-    # Ensure proper sentence boundaries (period + space)
     text = re.sub(r'\.([A-Z])', r'. \1', text)
-    
     return text.strip()
 
+# ------------------------------------------------------------------
+# 2. ROBUST SENTENCE SPLITTING (NLTK)
+# ------------------------------------------------------------------
 def split_sentences(text: str) -> list[str]:
-    text = re.sub(r"(?<=\b[A-Z])\.", "###DOT###", text)
-    text = re.sub(r"(?<=\bMr)\.", "###DOT###", text)
-    text = re.sub(r"(?<=\bDr)\.", "###DOT###", text)
-    text = re.sub(r"(?<=\bMs)\.", "###DOT###", text)
-    text = re.sub(r"(?<=\bMrs)\.", "###DOT###", text)
-    sentences = re.split(r"[.!?]\s+", text)
-    sentences = [s.replace("###DOT###", ".") for s in sentences]
+    """
+    Split text into sentences using NLTK's pre-trained Punkt tokenizer.
+    It automatically handles abbreviations, quotes, and ellipses.
+    """
+    if not text:
+        return []
+
+    # NLTK does the heavy lifting
+    sentences = sent_tokenize(text)
+
+    # Clean and capitalize
     sentences = [s.strip() for s in sentences if s.strip()]
     sentences = [s[0].upper() + s[1:] for s in sentences if len(s) > 0]
+
     return sentences
 
 # ------------------------------------------------------------------
-# 2. IMPROVED ARGUMENT EXTRACTION
+# 3. ARGUMENT EXTRACTION
 # ------------------------------------------------------------------
 def extract_arguments(text: str) -> dict:
     # Single-sentence "so" / "therefore"
@@ -98,49 +111,49 @@ def extract_arguments(text: str) -> dict:
         lower = sent.lower()
         score = 0.0
 
-        # ---- Big bonus: sentence starts with "Therefore" or "So" ----
+        # Big bonus: sentence starts with "Therefore" or "So"
         if re.search(r'^(therefore|so|thus|hence)\b', lower):
             score += 4.0
 
-        # ---- NEW: Bonus for policy recommendations ----
+        # Bonus for policy recommendations
         if re.search(r'\b(we need|we should|we must|the solution is|the answer is)\b', lower):
             score += 2.5
 
-        # ---- NEW: Bonus for final sentences ----
+        # Bonus for final sentences
         if i >= n - 2:
             score += 1.5
 
-        # ---- Penalise counterargument openers ----
+        # Penalise counterargument openers
         if re.search(r'^(they argue|critics say|opponents claim|proponents argue|some say|others argue)', lower):
             score -= 3.0
 
-        # ---- Penalise quotations ----
+        # Penalise quotations
         if '"' in sent or "'" in sent or "“" in sent or "”" in sent:
             score -= 2.0
 
-        # ---- Penalise sentences that start with "however" ----
+        # Penalise sentences that start with "however"
         if lower.startswith("however"):
             score -= 2.0
 
-        # ---- Bonus: strong conclusion indicators ----
+        # Bonus: strong conclusion indicators
         if re.search(r'\b(therefore|so|thus|hence|consequently|as a result|ultimately|in conclusion)\b', lower):
             score += 3.0
 
-        # ---- Bonus: substantive claims ----
+        # Bonus: substantive claims
         if re.search(r'\b(should|must|ought to|need to|is essential|is necessary)\b', lower):
             score += 1.5
 
-        # ---- Bonus: strong thesis phrases ----
+        # Bonus: strong thesis phrases
         if re.search(r'\b(the key is|the point is|my argument is|i conclude)\b', lower):
             score += 2.0
 
-        # ---- Position bonus: last sentence gets a big boost ----
+        # Position bonus: last sentence gets a big boost
         if i == n - 1:
             score += 2.0
         elif i >= 0.8 * n:
             score += 0.8
 
-        # ---- Length: prefer 10–25 word conclusions ----
+        # Length: prefer 10–25 word conclusions
         word_count = len(sent.split())
         if 10 <= word_count <= 25:
             score += 0.5
@@ -172,7 +185,6 @@ def extract_arguments(text: str) -> dict:
         "first", "second", "third", "finally",
         "shows", "found", "reported", "revealed",
         "in addition", "moreover", "furthermore",
-        # ---- Opinion and commentary markers ----
         "i think", "i believe", "my view is", "in my opinion",
         "we need", "we should", "we must", "we can't",
         "the reality is", "the truth is", "the point is",
@@ -184,7 +196,6 @@ def extract_arguments(text: str) -> dict:
         "example", "study", "research", "data", "evidence",
         "GDPR", "EU", "European Union", "Stanford", "Harvard",
         "Cambridge", "Oxford", "Microsoft", "Google", "cents", "%",
-        # ---- Commentary evidence ----
         "expert", "analyst", "reporter", "source", "friend"
     ]
 
@@ -200,7 +211,6 @@ def extract_arguments(text: str) -> dict:
         sent = sentences[idx]
         lower = sent.lower()
 
-        # ---- Skip fluff ----
         is_fluff = False
         for fluff in fluff_indicators:
             if fluff in lower:
@@ -211,12 +221,10 @@ def extract_arguments(text: str) -> dict:
 
         score = 0
 
-        # ---- Premise indicators ----
         for word in premise_indicators:
             if word in lower:
                 score += 1
 
-        # ---- Evidence boost ----
         for word in evidence_boost:
             if word in lower:
                 score += 2
@@ -259,7 +267,7 @@ def extract_arguments(text: str) -> dict:
     return {"premises": final_premises, "conclusion": conclusion}
 
 # ------------------------------------------------------------------
-# 3. NARROWED FALLACY DETECTION
+# 4. FALLACY DETECTION
 # ------------------------------------------------------------------
 def detect_fallacies(premises: list, conclusion: str) -> list[dict]:
     text = " ".join(premises + [conclusion]).lower()
@@ -289,7 +297,7 @@ def detect_fallacies(premises: list, conclusion: str) -> list[dict]:
     return fallacies
 
 # ------------------------------------------------------------------
-# 4. FORMAL LOGIC TRANSLATION
+# 5. FORMAL LOGIC TRANSLATION
 # ------------------------------------------------------------------
 def translate_to_formal(premises: list, conclusion: str) -> dict:
     var_map = {}
@@ -338,7 +346,7 @@ def translate_to_formal(premises: list, conclusion: str) -> dict:
     }
 
 # ------------------------------------------------------------------
-# 5. SYLLOGISM DETECTION
+# 6. SYLLOGISM DETECTION
 # ------------------------------------------------------------------
 def syllogism_detection(premises: list, conclusion: str) -> bool:
     prem_text = clean_text(" ".join(premises))
@@ -379,7 +387,7 @@ def syllogism_detection(premises: list, conclusion: str) -> bool:
     return False
 
 # ------------------------------------------------------------------
-# 6. SYMPY CHECK
+# 7. SYMPY CHECK
 # ------------------------------------------------------------------
 def check_with_sympy(formal_premises: list, formal_conclusion: str, var_map: dict) -> bool:
     try:
@@ -392,7 +400,7 @@ def check_with_sympy(formal_premises: list, formal_conclusion: str, var_map: dic
         return False
 
 # ------------------------------------------------------------------
-# 7. MAIN ANALYSIS PIPELINE
+# 8. MAIN ANALYSIS PIPELINE
 # ------------------------------------------------------------------
 def analyze_argument(text: str) -> dict:
     extracted = extract_arguments(text)
@@ -417,7 +425,7 @@ def analyze_argument(text: str) -> dict:
     }
 
 # ------------------------------------------------------------------
-# 8. URL ANALYSIS ENDPOINT (with text cleaning)
+# 9. URL ANALYSIS ENDPOINT
 # ------------------------------------------------------------------
 @app.post("/analyze_url")
 def analyze_url(request: dict):
@@ -436,16 +444,14 @@ def analyze_url(request: dict):
                 "error": "Could not extract enough text from the URL. The page might be paywalled or behind a login."
             }
 
-        # ---- NEW: Clean the text before analysis ----
         text = clean_article_text(text)
-
         return analyze_argument(text)
 
     except Exception as e:
         return {"error": f"Failed to fetch or parse the URL: {str(e)}"}
 
 # ------------------------------------------------------------------
-# 9. API ENDPOINTS
+# 10. API ENDPOINTS
 # ------------------------------------------------------------------
 @app.post("/deconstruct")
 def deconstruct(request: DeconstructRequest):
