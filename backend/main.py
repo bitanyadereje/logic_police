@@ -34,12 +34,30 @@ class DeconstructRequest(BaseModel):
     text: str
 
 # ------------------------------------------------------------------
-# 1. TEXT CLEANING & SENTENCE SPLITTING
+# 1. TEXT CLEANING
 # ------------------------------------------------------------------
 def clean_text(text: str) -> str:
     text = text.lower()
     text = text.translate(str.maketrans('', '', string.punctuation))
     return ' '.join(text.split())
+
+def clean_article_text(text: str) -> str:
+    """
+    Clean article text: remove extra spaces, fix line breaks, normalize punctuation.
+    """
+    # Remove extra newlines and spaces
+    text = re.sub(r'\n+', ' ', text)
+    text = re.sub(r'\s+', ' ', text)
+    
+    # Fix common punctuation issues
+    text = re.sub(r'\.\.\.', '...', text)
+    text = re.sub(r'\s+\.', '.', text)
+    text = re.sub(r'\.\s+\.', '..', text)
+    
+    # Ensure proper sentence boundaries (period + space)
+    text = re.sub(r'\.([A-Z])', r'. \1', text)
+    
+    return text.strip()
 
 def split_sentences(text: str) -> list[str]:
     text = re.sub(r"(?<=\b[A-Z])\.", "###DOT###", text)
@@ -54,7 +72,7 @@ def split_sentences(text: str) -> list[str]:
     return sentences
 
 # ------------------------------------------------------------------
-# 2. IMPROVED ARGUMENT EXTRACTION (for long texts & commentary)
+# 2. IMPROVED ARGUMENT EXTRACTION
 # ------------------------------------------------------------------
 def extract_arguments(text: str) -> dict:
     # Single-sentence "so" / "therefore"
@@ -146,7 +164,7 @@ def extract_arguments(text: str) -> dict:
 
     premise_indices = [i for i in range(n) if i != conclusion_idx]
 
-    # ---- Premise scoring (enhanced for commentary) ----
+    # ---- Premise scoring ----
     premise_indicators = [
         "because", "since", "as", "given that",
         "for example", "for instance", "according to",
@@ -154,7 +172,7 @@ def extract_arguments(text: str) -> dict:
         "first", "second", "third", "finally",
         "shows", "found", "reported", "revealed",
         "in addition", "moreover", "furthermore",
-        # ---- NEW: Opinion and commentary markers ----
+        # ---- Opinion and commentary markers ----
         "i think", "i believe", "my view is", "in my opinion",
         "we need", "we should", "we must", "we can't",
         "the reality is", "the truth is", "the point is",
@@ -166,7 +184,7 @@ def extract_arguments(text: str) -> dict:
         "example", "study", "research", "data", "evidence",
         "GDPR", "EU", "European Union", "Stanford", "Harvard",
         "Cambridge", "Oxford", "Microsoft", "Google", "cents", "%",
-        # ---- NEW: Commentary evidence ----
+        # ---- Commentary evidence ----
         "expert", "analyst", "reporter", "source", "friend"
     ]
 
@@ -219,7 +237,6 @@ def extract_arguments(text: str) -> dict:
             premise_scores.append((idx, sent, score))
 
     premise_scores.sort(key=lambda x: x[2], reverse=True)
-    # Allow up to 7 premises for long texts
     top_premises = premise_scores[:7]
 
     if not top_premises:
@@ -242,14 +259,13 @@ def extract_arguments(text: str) -> dict:
     return {"premises": final_premises, "conclusion": conclusion}
 
 # ------------------------------------------------------------------
-# 3. NARROWED FALLACY DETECTION (fewer false positives)
+# 3. NARROWED FALLACY DETECTION
 # ------------------------------------------------------------------
 def detect_fallacies(premises: list, conclusion: str) -> list[dict]:
     text = " ".join(premises + [conclusion]).lower()
     fallacies = []
 
     patterns = {
-        # ---- NARROWED: No more false positives ----
         "ad hominem": ["ad hominem", "attacks the person", "you can't trust him", "you're wrong because", "insult"],
         "straw man": ["straw man", "misrepresent", "exaggerated", "caricature"],
         "appeal to authority": ["authority", "expert", "scientist", "according to", "famous"],
@@ -401,7 +417,7 @@ def analyze_argument(text: str) -> dict:
     }
 
 # ------------------------------------------------------------------
-# 8. URL ANALYSIS ENDPOINT
+# 8. URL ANALYSIS ENDPOINT (with text cleaning)
 # ------------------------------------------------------------------
 @app.post("/analyze_url")
 def analyze_url(request: dict):
@@ -419,6 +435,9 @@ def analyze_url(request: dict):
             return {
                 "error": "Could not extract enough text from the URL. The page might be paywalled or behind a login."
             }
+
+        # ---- NEW: Clean the text before analysis ----
+        text = clean_article_text(text)
 
         return analyze_argument(text)
 
