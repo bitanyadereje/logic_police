@@ -11,7 +11,7 @@ import string
 import os
 
 # ------------------------------------------------------------------
-# NEW: URL article extraction
+# URL article extraction
 # ------------------------------------------------------------------
 from newspaper import Article
 
@@ -54,7 +54,7 @@ def split_sentences(text: str) -> list[str]:
     return sentences
 
 # ------------------------------------------------------------------
-# 2. IMPROVED ARGUMENT EXTRACTION
+# 2. IMPROVED ARGUMENT EXTRACTION (for long texts & commentary)
 # ------------------------------------------------------------------
 def extract_arguments(text: str) -> dict:
     # Single-sentence "so" / "therefore"
@@ -83,6 +83,14 @@ def extract_arguments(text: str) -> dict:
         # ---- Big bonus: sentence starts with "Therefore" or "So" ----
         if re.search(r'^(therefore|so|thus|hence)\b', lower):
             score += 4.0
+
+        # ---- NEW: Bonus for policy recommendations ----
+        if re.search(r'\b(we need|we should|we must|the solution is|the answer is)\b', lower):
+            score += 2.5
+
+        # ---- NEW: Bonus for final sentences ----
+        if i >= n - 2:
+            score += 1.5
 
         # ---- Penalise counterargument openers ----
         if re.search(r'^(they argue|critics say|opponents claim|proponents argue|some say|others argue)', lower):
@@ -138,20 +146,28 @@ def extract_arguments(text: str) -> dict:
 
     premise_indices = [i for i in range(n) if i != conclusion_idx]
 
-    # ---- Premise scoring ----
+    # ---- Premise scoring (enhanced for commentary) ----
     premise_indicators = [
         "because", "since", "as", "given that",
         "for example", "for instance", "according to",
         "research", "study", "data", "evidence",
         "first", "second", "third", "finally",
         "shows", "found", "reported", "revealed",
-        "in addition", "moreover", "furthermore"
+        "in addition", "moreover", "furthermore",
+        # ---- NEW: Opinion and commentary markers ----
+        "i think", "i believe", "my view is", "in my opinion",
+        "we need", "we should", "we must", "we can't",
+        "the reality is", "the truth is", "the point is",
+        "what matters is", "what we need is", "what i'm saying is",
+        "the problem is", "the issue is", "the question is",
     ]
 
     evidence_boost = [
         "example", "study", "research", "data", "evidence",
         "GDPR", "EU", "European Union", "Stanford", "Harvard",
-        "Cambridge", "Oxford", "Microsoft", "Google", "cents", "%"
+        "Cambridge", "Oxford", "Microsoft", "Google", "cents", "%",
+        # ---- NEW: Commentary evidence ----
+        "expert", "analyst", "reporter", "source", "friend"
     ]
 
     fluff_indicators = [
@@ -203,7 +219,8 @@ def extract_arguments(text: str) -> dict:
             premise_scores.append((idx, sent, score))
 
     premise_scores.sort(key=lambda x: x[2], reverse=True)
-    top_premises = premise_scores[:5]
+    # Allow up to 7 premises for long texts
+    top_premises = premise_scores[:7]
 
     if not top_premises:
         fallback_indices = [i for i in range(n) if i != conclusion_idx and len(sentences[i].split()) > 5][:2]
@@ -225,14 +242,15 @@ def extract_arguments(text: str) -> dict:
     return {"premises": final_premises, "conclusion": conclusion}
 
 # ------------------------------------------------------------------
-# 3. FALLACY DETECTION (Keyword Patterns)
+# 3. NARROWED FALLACY DETECTION (fewer false positives)
 # ------------------------------------------------------------------
 def detect_fallacies(premises: list, conclusion: str) -> list[dict]:
     text = " ".join(premises + [conclusion]).lower()
     fallacies = []
 
     patterns = {
-        "ad hominem": ["politician", "trust", "believe", "you can't trust", "attacks the person"],
+        # ---- NARROWED: No more false positives ----
+        "ad hominem": ["ad hominem", "attacks the person", "you can't trust him", "you're wrong because", "insult"],
         "straw man": ["straw man", "misrepresent", "exaggerated", "caricature"],
         "appeal to authority": ["authority", "expert", "scientist", "according to", "famous"],
         "slippery slope": ["slippery slope", "domino effect", "one thing leads to another"],
@@ -251,13 +269,6 @@ def detect_fallacies(premises: list, conclusion: str) -> list[dict]:
                 "explanation": f"Detected based on keywords: {', '.join(keywords)}"
             })
             break
-
-    if not fallacies:
-        if "politician" in text and ("trust" in text or "believe" in text):
-            fallacies.append({
-                "fallacy_name": "Ad Hominem",
-                "explanation": "The argument dismisses the claim based on the speaker's identity rather than addressing the claim itself."
-            })
 
     return fallacies
 
@@ -390,7 +401,7 @@ def analyze_argument(text: str) -> dict:
     }
 
 # ------------------------------------------------------------------
-# 8. NEW: URL ANALYSIS ENDPOINT
+# 8. URL ANALYSIS ENDPOINT
 # ------------------------------------------------------------------
 @app.post("/analyze_url")
 def analyze_url(request: dict):
@@ -399,7 +410,6 @@ def analyze_url(request: dict):
         raise HTTPException(status_code=400, detail="No URL provided")
 
     try:
-        # Download and parse the article
         article = Article(url)
         article.download()
         article.parse()
@@ -410,7 +420,6 @@ def analyze_url(request: dict):
                 "error": "Could not extract enough text from the URL. The page might be paywalled or behind a login."
             }
 
-        # Reuse your existing analysis pipeline
         return analyze_argument(text)
 
     except Exception as e:
