@@ -140,6 +140,59 @@
       max-width: 42ch;
     }
 
+    /* ─── Link input row ─── */
+    .workspace-link {
+      border: 1px solid var(--rule-strong);
+      background: var(--paper);
+      margin-bottom: 12px;
+    }
+    .workspace-link .workspace-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 16px;
+      border-bottom: 1px solid var(--rule);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ink-faint);
+    }
+    .workspace-link .workspace-head .hint {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+    .link-row {
+      display: flex;
+      gap: 8px;
+      padding: 8px 16px 12px 16px;
+    }
+    .link-row input {
+      flex: 1;
+      background: transparent;
+      border: 1px solid var(--rule);
+      border-radius: 4px;
+      padding: 8px 10px;
+      color: var(--ink);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      transition: border-color 0.2s ease;
+    }
+    .link-row input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    .link-row input::placeholder {
+      color: var(--ink-faint);
+    }
+    .link-row .btn-primary {
+      padding: 8px 18px;
+      font-size: 12.5px;
+      white-space: nowrap;
+    }
+
+    /* ─── Text input row (unchanged) ─── */
     .workspace {
       border: 1px solid var(--rule-strong);
       background: var(--paper);
@@ -448,6 +501,7 @@
       .hero { padding: 36px 0 30px; }
       .hero h1 { font-size: 27px; }
       .workspace-actions { flex-wrap: wrap; }
+      .link-row { flex-wrap: wrap; }
       .report-section { grid-template-columns: 1fr; gap: 8px; }
       .section-title, .report-section > .section-body { grid-column: 1; }
     }
@@ -473,6 +527,19 @@
       <p class="hero-sub">Deconstruct the reasoning. Test the logic. Verify the claims.</p>
     </div>
 
+    <!-- ─── NEW: URL Input ─── -->
+    <div class="workspace-link">
+      <div class="workspace-head">
+        <span>Link</span>
+        <span class="hint">paste an article URL</span>
+      </div>
+      <div class="link-row">
+        <input type="text" id="urlInput" placeholder="https://example.com/article" />
+        <button class="btn-primary" id="analyzeUrlBtn">Fetch &amp; Analyze</button>
+      </div>
+    </div>
+
+    <!-- ─── Existing Text Input ─── -->
     <div class="input-area">
       <div class="workspace">
         <div class="workspace-head">
@@ -487,21 +554,25 @@
       </div>
     </div>
 
+    <!-- LOADING STATE -->
     <div class="loading-state hidden" id="loadingState">
       <div class="ink-draw"></div>
       <div class="msg">Parsing the argument…</div>
     </div>
 
+    <!-- ERROR STATE -->
     <div class="error-state hidden" id="errorState">
       <h3>Couldn't parse that argument</h3>
       <p id="errorMessage">The extraction step didn't return a usable set of premises.</p>
       <button class="retry-btn" id="retryBtn">Try again</button>
     </div>
 
+    <!-- EMPTY STATE -->
     <div class="empty-state hidden" id="emptyState">
       <p>Paste an argument above, then click <strong>Analyze</strong>.</p>
     </div>
 
+    <!-- RESULT STATE -->
     <div id="resultState" class="hidden">
 
       <div class="report-summary">
@@ -568,6 +639,13 @@
 
 <script>
   // ────────────────────────────────────────────────────────────────────
+  // Base URL for the backend
+  // ────────────────────────────────────────────────────────────────────
+  const BASE_URL = 'https://logic-police.onrender.com';
+  const API_URL = BASE_URL + '/deconstruct';
+  const URL_ANALYZE_API = BASE_URL + '/analyze_url';
+
+  // ────────────────────────────────────────────────────────────────────
   // Dark mode persistence (localStorage)
   // ────────────────────────────────────────────────────────────────────
   (function initTheme() {
@@ -589,6 +667,8 @@
   const analyzeBtn = document.getElementById('analyzeBtn');
   const clearBtn = document.getElementById('clearBtn');
   const retryBtn = document.getElementById('retryBtn');
+  const urlInput = document.getElementById('urlInput');
+  const analyzeUrlBtn = document.getElementById('analyzeUrlBtn');
 
   const loadingState = document.getElementById('loadingState');
   const errorState = document.getElementById('errorState');
@@ -611,8 +691,6 @@
   const copyLabel = document.getElementById('copyLabel');
   const fallacyList = document.getElementById('fallacyList');
 
-  const API_URL = 'https://logic-police.onrender.com/deconstruct';
-
   // ────────────────────────────────────────────────────────────────────
   // State helpers
   // ────────────────────────────────────────────────────────────────────
@@ -628,17 +706,20 @@
   function renderLoading() {
     showState(loadingState);
     analyzeBtn.disabled = true;
+    analyzeUrlBtn.disabled = true;
   }
 
   function renderError(msg) {
     errorMessage.textContent = msg || 'The extraction step didn\'t return a usable set of premises.';
     showState(errorState);
     analyzeBtn.disabled = false;
+    analyzeUrlBtn.disabled = false;
   }
 
   function renderEmpty() {
     showState(emptyState);
     analyzeBtn.disabled = false;
+    analyzeUrlBtn.disabled = false;
   }
 
   function whyText(valid, count) {
@@ -732,10 +813,11 @@
 
     showState(resultState);
     analyzeBtn.disabled = false;
+    analyzeUrlBtn.disabled = false;
   }
 
   // ────────────────────────────────────────────────────────────────────
-  // Main analyze function
+  // Text analysis
   // ────────────────────────────────────────────────────────────────────
   async function analyzeText() {
     const text = inputText.value.trim();
@@ -767,6 +849,42 @@
   }
 
   // ────────────────────────────────────────────────────────────────────
+  // URL analysis
+  // ────────────────────────────────────────────────────────────────────
+  async function analyzeUrl() {
+    const url = urlInput.value.trim();
+    if (!url) {
+      renderError('Please paste a valid URL.');
+      return;
+    }
+
+    renderLoading();
+
+    try {
+      const response = await fetch(URL_ANALYZE_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || `Server returned ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data.error) {
+        renderError(data.error);
+      } else {
+        renderResult(data);
+      }
+    } catch (err) {
+      console.error('URL analysis error:', err);
+      renderError(`Could not analyze the URL: ${err.message}`);
+    }
+  }
+
+  // ────────────────────────────────────────────────────────────────────
   // Event listeners
   // ────────────────────────────────────────────────────────────────────
   analyzeBtn.addEventListener('click', analyzeText);
@@ -777,7 +895,16 @@
     renderEmpty();
   });
 
-  retryBtn.addEventListener('click', analyzeText);
+  retryBtn.addEventListener('click', () => {
+    // Retry the last action? We'll just re-run text analysis if there's text, or fallback to empty.
+    if (inputText.value.trim()) {
+      analyzeText();
+    } else if (urlInput.value.trim()) {
+      analyzeUrl();
+    } else {
+      renderEmpty();
+    }
+  });
 
   whyTrigger.addEventListener('click', () => {
     tooltip.classList.toggle('open');
@@ -800,13 +927,24 @@
     }
   });
 
-  // Ctrl+Enter to analyze
+  // URL input: Enter key triggers analysis
+  urlInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      analyzeUrl();
+    }
+  });
+
+  // Text input: Ctrl+Enter triggers analysis
   inputText.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       analyzeText();
     }
   });
+
+  // URL button click
+  analyzeUrlBtn.addEventListener('click', analyzeUrl);
 
   // Auto-expand the textarea as the user types
   function autoResize() {

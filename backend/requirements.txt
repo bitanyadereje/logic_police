@@ -2,5 +2,4 @@
 uvicorn
 sympy
 python-multipart
-instructor
-ollama
+newspaper3k

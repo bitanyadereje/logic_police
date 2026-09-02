@@ -2,12 +2,18 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from fastapi import HTTPException
 from pydantic import BaseModel
 from sympy import symbols, And, Not, satisfiable
 from sympy.parsing.sympy_parser import parse_expr
 import re
 import string
 import os
+
+# ------------------------------------------------------------------
+# NEW: URL article extraction
+# ------------------------------------------------------------------
+from newspaper import Article
 
 app = FastAPI()
 
@@ -384,7 +390,34 @@ def analyze_argument(text: str) -> dict:
     }
 
 # ------------------------------------------------------------------
-# 8. API ENDPOINTS
+# 8. NEW: URL ANALYSIS ENDPOINT
+# ------------------------------------------------------------------
+@app.post("/analyze_url")
+def analyze_url(request: dict):
+    url = request.get("url")
+    if not url:
+        raise HTTPException(status_code=400, detail="No URL provided")
+
+    try:
+        # Download and parse the article
+        article = Article(url)
+        article.download()
+        article.parse()
+        text = article.text
+
+        if not text or len(text) < 50:
+            return {
+                "error": "Could not extract enough text from the URL. The page might be paywalled or behind a login."
+            }
+
+        # Reuse your existing analysis pipeline
+        return analyze_argument(text)
+
+    except Exception as e:
+        return {"error": f"Failed to fetch or parse the URL: {str(e)}"}
+
+# ------------------------------------------------------------------
+# 9. API ENDPOINTS
 # ------------------------------------------------------------------
 @app.post("/deconstruct")
 def deconstruct(request: DeconstructRequest):
