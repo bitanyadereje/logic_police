@@ -9,9 +9,6 @@ import re
 import string
 import os
 
-# ------------------------------------------------------------------
-# 1. FastAPI App Setup with Static File Serving
-# ------------------------------------------------------------------
 app = FastAPI()
 
 app.add_middleware(
@@ -21,26 +18,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve static files (CSS, JS if you split them — but we keep it all in one index.html)
-# Mount the current directory so the static files can be served
 app.mount("/static", StaticFiles(directory="."), name="static")
 
-# ------------------------------------------------------------------
-# 2. Serve the Web App at the Root URL
-# ------------------------------------------------------------------
 @app.get("/")
 async def serve_index():
-    """Serve the index.html web app."""
     return FileResponse("index.html")
 
-# ------------------------------------------------------------------
-# 3. API Models
-# ------------------------------------------------------------------
 class DeconstructRequest(BaseModel):
     text: str
 
 # ------------------------------------------------------------------
-# 4. HEURISTIC EXTRACTION
+# 1. TEXT CLEANING & SENTENCE SPLITTING
 # ------------------------------------------------------------------
 def clean_text(text: str) -> str:
     text = text.lower()
@@ -59,6 +47,9 @@ def split_sentences(text: str) -> list[str]:
     sentences = [s[0].upper() + s[1:] for s in sentences if len(s) > 0]
     return sentences
 
+# ------------------------------------------------------------------
+# 2. IMPROVED ARGUMENT EXTRACTION
+# ------------------------------------------------------------------
 def extract_arguments(text: str) -> dict:
     # Single-sentence "so" / "therefore"
     text_clean = text.strip()
@@ -77,28 +68,47 @@ def extract_arguments(text: str) -> dict:
 
     n = len(sentences)
 
+    # ---- Conclusion scoring ----
     conclusion_scores = []
     for i, sent in enumerate(sentences):
         lower = sent.lower()
         score = 0.0
 
-        if '"' in sent or "'" in sent or "“" in sent or "”" in sent:
+        # ---- Big bonus: sentence starts with "Therefore" or "So" ----
+        if re.search(r'^(therefore|so|thus|hence)\b', lower):
+            score += 4.0
+
+        # ---- Penalise counterargument openers ----
+        if re.search(r'^(they argue|critics say|opponents claim|proponents argue|some say|others argue)', lower):
             score -= 3.0
+
+        # ---- Penalise quotations ----
+        if '"' in sent or "'" in sent or "“" in sent or "”" in sent:
+            score -= 2.0
+
+        # ---- Penalise sentences that start with "however" ----
         if lower.startswith("however"):
             score -= 2.0
-        if "good news" in lower or "bad news" in lower:
-            score -= 2.0
 
-        if re.search(r"\b(can reclaim|is possible|is essential|is necessary|is clear|the evidence shows|research shows|studies show)\b", lower):
-            score += 2.5
-        if re.search(r"\b(should|must|ought to|need to)\b", lower):
-            score += 2.0
-        if re.search(r"\b(the key is|the point is|my argument is|i conclude|ultimately)\b", lower):
+        # ---- Bonus: strong conclusion indicators ----
+        if re.search(r'\b(therefore|so|thus|hence|consequently|as a result|ultimately|in conclusion)\b', lower):
+            score += 3.0
+
+        # ---- Bonus: substantive claims ----
+        if re.search(r'\b(should|must|ought to|need to|is essential|is necessary)\b', lower):
+            score += 1.5
+
+        # ---- Bonus: strong thesis phrases ----
+        if re.search(r'\b(the key is|the point is|my argument is|i conclude)\b', lower):
             score += 2.0
 
-        if i >= 0.7 * n:
+        # ---- Position bonus: last sentence gets a big boost ----
+        if i == n - 1:
+            score += 2.0
+        elif i >= 0.8 * n:
             score += 0.8
 
+        # ---- Length: prefer 10–25 word conclusions ----
         word_count = len(sent.split())
         if 10 <= word_count <= 25:
             score += 0.5
@@ -109,25 +119,20 @@ def extract_arguments(text: str) -> dict:
 
         conclusion_scores.append((i, sent, score))
 
+    # ---- Find the best conclusion ----
     conclusion_scores.sort(key=lambda x: x[2], reverse=True)
     best_conc = conclusion_scores[0] if conclusion_scores else None
 
     if not best_conc or best_conc[2] < 0.5:
-        for i in range(n - 1, -1, -1):
-            sent = sentences[i]
-            if len(sent.split()) > 6 and '"' not in sent and "'" not in sent and "“" not in sent:
-                conclusion = sent
-                conclusion_idx = i
-                break
-        else:
-            conclusion = sentences[-1]
-            conclusion_idx = n - 1
+        conclusion = sentences[-1]
+        conclusion_idx = n - 1
     else:
         conclusion = best_conc[1]
         conclusion_idx = best_conc[0]
 
     premise_indices = [i for i in range(n) if i != conclusion_idx]
 
+    # ---- Premise scoring ----
     premise_indicators = [
         "because", "since", "as", "given that",
         "for example", "for instance", "according to",
@@ -137,10 +142,17 @@ def extract_arguments(text: str) -> dict:
         "in addition", "moreover", "furthermore"
     ]
 
+    evidence_boost = [
+        "example", "study", "research", "data", "evidence",
+        "GDPR", "EU", "European Union", "Stanford", "Harvard",
+        "Cambridge", "Oxford", "Microsoft", "Google", "cents", "%"
+    ]
+
     fluff_indicators = [
         "good news", "bad news", "fun!", "what does the evidence say",
         "let me tell you", "here's the thing", "the best", "the worst",
-        "meh", "great | good | meh"
+        "meh", "great | good | meh", "every week", "we hear about",
+        "new breakthroughs", "advancing faster", "with these advances"
     ]
 
     premise_scores = []
@@ -148,6 +160,7 @@ def extract_arguments(text: str) -> dict:
         sent = sentences[idx]
         lower = sent.lower()
 
+        # ---- Skip fluff ----
         is_fluff = False
         for fluff in fluff_indicators:
             if fluff in lower:
@@ -157,15 +170,24 @@ def extract_arguments(text: str) -> dict:
             continue
 
         score = 0
+
+        # ---- Premise indicators ----
         for word in premise_indicators:
             if word in lower:
                 score += 1
 
+        # ---- Evidence boost ----
+        for word in evidence_boost:
+            if word in lower:
+                score += 2
+
         if re.search(r"\b\d+%?\b", sent):
             score += 2
+
         if re.search(r"\b(study|research|data|evidence|report|found|showed)\b", lower):
             score += 2
-        if re.search(r"\b(Microsoft|Cambridge|Harvard|Stanford|Oxford|Nature)\b", sent):
+
+        if re.search(r"\b(Microsoft|Cambridge|Harvard|Stanford|Oxford|Nature|GDPR|EU)\b", sent):
             score += 3
 
         if len(sent.split()) < 4:
@@ -197,7 +219,7 @@ def extract_arguments(text: str) -> dict:
     return {"premises": final_premises, "conclusion": conclusion}
 
 # ------------------------------------------------------------------
-# 5. FALLACY DETECTION (Keyword Patterns)
+# 3. FALLACY DETECTION (Keyword Patterns)
 # ------------------------------------------------------------------
 def detect_fallacies(premises: list, conclusion: str) -> list[dict]:
     text = " ".join(premises + [conclusion]).lower()
@@ -210,7 +232,7 @@ def detect_fallacies(premises: list, conclusion: str) -> list[dict]:
         "slippery slope": ["slippery slope", "domino effect", "one thing leads to another"],
         "circular reasoning": ["circular reasoning", "begging the question", "assumes the conclusion"],
         "false dilemma": ["false dilemma", "either/or", "only two options"],
-        "hasty generalization": ["hasty generalization", "all", "every", "never", "always"],
+        "hasty generalization": ["all women", "all men", "all people", "everyone always", "never once", "all feminists"],
         "ad populum": ["everyone thinks", "popular", "common sense", "the crowd"],
         "tu quoque": ["tu quoque", "you too", "you also", "hypocrite"],
         "appeal to emotion": ["appeal to emotion", "fear", "pity", "guilt", "anger"],
@@ -234,7 +256,7 @@ def detect_fallacies(premises: list, conclusion: str) -> list[dict]:
     return fallacies
 
 # ------------------------------------------------------------------
-# 6. FORMAL LOGIC TRANSLATION
+# 4. FORMAL LOGIC TRANSLATION
 # ------------------------------------------------------------------
 def translate_to_formal(premises: list, conclusion: str) -> dict:
     var_map = {}
@@ -283,7 +305,7 @@ def translate_to_formal(premises: list, conclusion: str) -> dict:
     }
 
 # ------------------------------------------------------------------
-# 7. SYLLOGISM DETECTION
+# 5. SYLLOGISM DETECTION
 # ------------------------------------------------------------------
 def syllogism_detection(premises: list, conclusion: str) -> bool:
     prem_text = clean_text(" ".join(premises))
@@ -324,7 +346,7 @@ def syllogism_detection(premises: list, conclusion: str) -> bool:
     return False
 
 # ------------------------------------------------------------------
-# 8. SYMPY CHECK
+# 6. SYMPY CHECK
 # ------------------------------------------------------------------
 def check_with_sympy(formal_premises: list, formal_conclusion: str, var_map: dict) -> bool:
     try:
@@ -337,7 +359,7 @@ def check_with_sympy(formal_premises: list, formal_conclusion: str, var_map: dic
         return False
 
 # ------------------------------------------------------------------
-# 9. MAIN ANALYSIS PIPELINE
+# 7. MAIN ANALYSIS PIPELINE
 # ------------------------------------------------------------------
 def analyze_argument(text: str) -> dict:
     extracted = extract_arguments(text)
@@ -362,7 +384,7 @@ def analyze_argument(text: str) -> dict:
     }
 
 # ------------------------------------------------------------------
-# 10. API ENDPOINTS
+# 8. API ENDPOINTS
 # ------------------------------------------------------------------
 @app.post("/deconstruct")
 def deconstruct(request: DeconstructRequest):
