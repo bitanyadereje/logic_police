@@ -1,13 +1,10 @@
 {
   "manifest_version": 3,
   "name": "Logic Pollice",
-  "version": "3.0",
-  "description": "Check deductive validity of arguments.",
+  "version": "1.0",
+  "description": "Highlight any argument and get a mathematical thumbs‑up or thumbs‑down on its logical validity.",
   "permissions": ["activeTab", "sidePanel", "storage", "tabs"],
-  "host_permissions": [
-  "http://localhost:8000/*",
-  "https://logic-police.onrender.com/*"
-  ],
+  "host_permissions": ["https://logic-police.onrender.com/*"],
   "background": {"service_worker": "background.js"},
   "content_scripts": [{"matches": ["<all_urls>"], "js": ["content.js"]}],
   "side_panel": {"default_path": "sidebar.html"},
@@ -15,7 +12,10 @@
   "commands": {
     "_execute_action": {
       "suggested_key": {"default": "Ctrl+Shift+Y"},
-      "description": "Open sidebar"
+      "description": "Open Logic Pollice sidebar"
     }
+  },
+  "icons": {
+    "128": "icon128.png"
   }
 }
