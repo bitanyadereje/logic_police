@@ -8,7 +8,6 @@ from sympy import symbols, And, Not, satisfiable
 from sympy.parsing.sympy_parser import parse_expr
 import re
 import string
-import os
 
 # ------------------------------------------------------------------
 # URL article extraction
@@ -21,12 +20,11 @@ from newspaper import Article
 import nltk
 from nltk.tokenize import sent_tokenize
 
-# Download the necessary model on startup (quietly)
 try:
     nltk.download('punkt', quiet=True)
     nltk.download('punkt_tab', quiet=True)
 except Exception:
-    pass  # Fallback if NLTK isn't installed yet
+    pass
 
 app = FastAPI()
 
@@ -55,191 +53,145 @@ def clean_text(text: str) -> str:
     return ' '.join(text.split())
 
 def clean_article_text(text: str) -> str:
-    """Clean article text: remove extra spaces, fix line breaks."""
-    text = re.sub(r'\n+', ' ', text)
-    text = re.sub(r'\s+', ' ', text)
-    text = re.sub(r'\.\.\.', '...', text)
-    text = re.sub(r'\s+\.', '.', text)
-    text = re.sub(r'\.\s+\.', '..', text)
-    text = re.sub(r'\.([A-Z])', r'. \1', text)
+    """Clean article text while preserving paragraph structure."""
+    text = re.sub(r'[ \t]+', ' ', text)       # collapse spaces, not newlines
+    text = re.sub(r'\n{3,}', '\n\n', text)    # normalize paragraph breaks
     return text.strip()
 
 # ------------------------------------------------------------------
 # 2. ROBUST SENTENCE SPLITTING (NLTK)
 # ------------------------------------------------------------------
 def split_sentences(text: str) -> list[str]:
-    """
-    Split text into sentences using NLTK's pre-trained Punkt tokenizer.
-    It automatically handles abbreviations, quotes, and ellipses.
-    """
     if not text:
         return []
-
-    # NLTK does the heavy lifting
     sentences = sent_tokenize(text)
-
-    # Clean and capitalize
     sentences = [s.strip() for s in sentences if s.strip()]
     sentences = [s[0].upper() + s[1:] for s in sentences if len(s) > 0]
-
     return sentences
 
 # ------------------------------------------------------------------
-# 3. ARGUMENT EXTRACTION
+# 3. IMPROVED ARGUMENT EXTRACTION (paragraph-aware + commentary)
 # ------------------------------------------------------------------
 def extract_arguments(text: str) -> dict:
-    # Single-sentence "so" / "therefore"
-    text_clean = text.strip()
-    if " so " in text_clean.lower():
-        parts = re.split(r'\s+so\s+', text_clean, maxsplit=1, flags=re.IGNORECASE)
-        if len(parts) == 2:
-            return {"premises": [parts[0].strip()], "conclusion": parts[1].strip()}
-    if " therefore " in text_clean.lower():
-        parts = re.split(r'\s+therefore\s+', text_clean, maxsplit=1, flags=re.IGNORECASE)
-        if len(parts) == 2:
-            return {"premises": [parts[0].strip()], "conclusion": parts[1].strip()}
+    # 1. PARAGRAPH-AWARE SPLITTING
+    paragraphs = [p.strip() for p in re.split(r'\n+', text) if p.strip()]
 
-    sentences = split_sentences(text)
-    if not sentences:
-        return {"premises": [], "conclusion": ""}
+    sentence_data = []
+    for p_idx, p_text in enumerate(paragraphs):
+        sents = split_sentences(p_text)
+        for s_idx, sent in enumerate(sents):
+            sentence_data.append({
+                "text": sent,
+                "p_idx": p_idx,
+                "is_last_p": p_idx == len(paragraphs) - 1,
+                "is_first_p": p_idx == 0,
+                "is_last_in_p": s_idx == len(sents) - 1
+            })
 
-    n = len(sentences)
+    if not sentence_data:
+        return {"error": "Text too short or unreadable."}
 
-    # ---- Conclusion scoring ----
+    n = len(sentence_data)
+
+    # 2. CONCLUSION SCORING (Upgraded for Commentary)
     conclusion_scores = []
-    for i, sent in enumerate(sentences):
+    for i, data in enumerate(sentence_data):
+        sent = data["text"]
         lower = sent.lower()
         score = 0.0
 
-        # Big bonus: sentence starts with "Therefore" or "So"
+        # Classic formal indicators
         if re.search(r'^(therefore|so|thus|hence)\b', lower):
             score += 4.0
-
-        # Bonus for policy recommendations
-        if re.search(r'\b(we need|we should|we must|the solution is|the answer is)\b', lower):
-            score += 2.5
-
-        # Bonus for final sentences
-        if i >= n - 2:
-            score += 1.5
-
-        # Penalise counterargument openers
-        if re.search(r'^(they argue|critics say|opponents claim|proponents argue|some say|others argue)', lower):
-            score -= 3.0
-
-        # Penalise quotations
-        if '"' in sent or "'" in sent or "“" in sent or "”" in sent:
-            score -= 2.0
-
-        # Penalise sentences that start with "however"
-        if lower.startswith("however"):
-            score -= 2.0
-
-        # Bonus: strong conclusion indicators
-        if re.search(r'\b(therefore|so|thus|hence|consequently|as a result|ultimately|in conclusion)\b', lower):
+        if re.search(r'\b(consequently|as a result|ultimately|in conclusion)\b', lower):
             score += 3.0
 
-        # Bonus: substantive claims
-        if re.search(r'\b(should|must|ought to|need to|is essential|is necessary)\b', lower):
-            score += 1.5
+        # Stance markers (Commentary/Opinion)
+        if re.search(r'\b(the reality is|the point is|the time is now|the bottom line is)\b', lower):
+            score += 3.5
+        if re.search(r'\b(we need to|we must|we should|it is time to|the solution is)\b', lower):
+            score += 2.5
 
-        # Bonus: strong thesis phrases
-        if re.search(r'\b(the key is|the point is|my argument is|i conclude)\b', lower):
-            score += 2.0
+        # Paragraph structural weighting
+        if data["is_last_p"]:
+            score += 3.0
+        if data["is_last_in_p"] and not data["is_first_p"]:
+            score += 1.0
 
-        # Position bonus: last sentence gets a big boost
-        if i == n - 1:
-            score += 2.0
-        elif i >= 0.8 * n:
-            score += 0.8
-
-        # Length: prefer 10–25 word conclusions
-        word_count = len(sent.split())
-        if 10 <= word_count <= 25:
-            score += 0.5
-        elif word_count < 6:
-            score -= 1.0
-        if word_count < 4:
+        # Penalties
+        if re.search(r'^(they argue|critics say|opponents claim|some say)', lower):
+            score -= 3.0
+        if lower.startswith("however") or lower.startswith("but"):
             score -= 2.0
+        if '"' in sent or "'" in sent:
+            score -= 1.0
+
+        # Length constraints
+        word_count = len(sent.split())
+        if 8 <= word_count <= 30:
+            score += 1.0
+        elif word_count < 5:
+            score -= 3.0
 
         conclusion_scores.append((i, sent, score))
 
-    # ---- Find the best conclusion ----
+    # Identify Conclusion
     conclusion_scores.sort(key=lambda x: x[2], reverse=True)
-    best_conc = conclusion_scores[0] if conclusion_scores else None
+    best_conc = conclusion_scores[0]
 
-    if not best_conc or best_conc[2] < 0.5:
-        conclusion = sentences[-1]
+    if best_conc[2] < 1.0:
         conclusion_idx = n - 1
+        conclusion = sentence_data[-1]["text"]
     else:
-        conclusion = best_conc[1]
         conclusion_idx = best_conc[0]
+        conclusion = best_conc[1]
 
+    # 3. PREMISE SCORING
     premise_indices = [i for i in range(n) if i != conclusion_idx]
 
-    # ---- Premise scoring ----
     premise_indicators = [
-        "because", "since", "as", "given that",
-        "for example", "for instance", "according to",
-        "research", "study", "data", "evidence",
-        "first", "second", "third", "finally",
-        "shows", "found", "reported", "revealed",
-        "in addition", "moreover", "furthermore",
-        "i think", "i believe", "my view is", "in my opinion",
-        "we need", "we should", "we must", "we can't",
-        "the reality is", "the truth is", "the point is",
-        "what matters is", "what we need is", "what i'm saying is",
-        "the problem is", "the issue is", "the question is",
+        "because", "since", "as", "given that", "for example", "according to",
+        "shows", "found", "reported", "revealed", "furthermore", "moreover"
     ]
 
     evidence_boost = [
-        "example", "study", "research", "data", "evidence",
-        "GDPR", "EU", "European Union", "Stanford", "Harvard",
-        "Cambridge", "Oxford", "Microsoft", "Google", "cents", "%",
-        "expert", "analyst", "reporter", "source", "friend"
+        "study", "research", "data", "evidence", "expert", "analyst",
+        "stanford", "harvard", "oxford", "microsoft", "google", "%"
     ]
 
     fluff_indicators = [
-        "good news", "bad news", "fun!", "what does the evidence say",
-        "let me tell you", "here's the thing", "the best", "the worst",
-        "meh", "great | good | meh", "every week", "we hear about",
-        "new breakthroughs", "advancing faster", "with these advances"
+        "good news", "let me tell you", "here's the thing", "meh", "fun!"
     ]
 
     premise_scores = []
     for idx in premise_indices:
-        sent = sentences[idx]
+        sent = sentence_data[idx]["text"]
         lower = sent.lower()
 
-        is_fluff = False
-        for fluff in fluff_indicators:
-            if fluff in lower:
-                is_fluff = True
-                break
-        if is_fluff:
+        if any(fluff in lower for fluff in fluff_indicators):
             continue
 
         score = 0
-
         for word in premise_indicators:
             if word in lower:
-                score += 1
-
+                score += 1.5
         for word in evidence_boost:
             if word in lower:
-                score += 2
+                score += 2.0
 
         if re.search(r"\b\d+%?\b", sent):
-            score += 2
+            score += 2.0
 
-        if re.search(r"\b(study|research|data|evidence|report|found|showed)\b", lower):
-            score += 2
+        # Giant Premise Splitter
+        word_count = len(sent.split())
+        if word_count > 60:
+            parts = re.split(r'(?:;|:| - | \band\b | \bbut\b )', sent)
+            if len(parts) > 1 and len(parts[0].split()) > 5:
+                sent = parts[0].strip() + "."
+                score -= 1.0
 
-        if re.search(r"\b(Microsoft|Cambridge|Harvard|Stanford|Oxford|Nature|GDPR|EU)\b", sent):
-            score += 3
-
-        if len(sent.split()) < 4:
-            score -= 1
+        if word_count < 4:
+            score -= 2.0
 
         if score > 0:
             premise_scores.append((idx, sent, score))
@@ -247,10 +199,14 @@ def extract_arguments(text: str) -> dict:
     premise_scores.sort(key=lambda x: x[2], reverse=True)
     top_premises = premise_scores[:7]
 
+            # Fallback: use ALL non-conclusion sentences as premises
     if not top_premises:
-        fallback_indices = [i for i in range(n) if i != conclusion_idx and len(sentences[i].split()) > 5][:2]
-        top_premises = [(i, sentences[i], 0) for i in fallback_indices]
-
+        top_premises = [
+            (i, sentence_data[i]["text"], 0)
+            for i in range(n)
+            if i != conclusion_idx
+        ]
+    # Deduplicate and finalize
     seen = set()
     final_premises = []
     for idx, sent, _ in top_premises:
@@ -258,12 +214,10 @@ def extract_arguments(text: str) -> dict:
             seen.add(sent)
             final_premises.append(sent)
 
-    if not final_premises:
-        for i, sent in enumerate(sentences):
-            if sent != conclusion and len(sent.split()) > 5 and i not in premise_indices:
-                final_premises.append(sent)
-                break
-
+        # 4. MINIMUM-VIABLE-ARGUMENT CHECK (loosened)
+    if len(final_premises) < 1:
+        return {"error": "Argument too weak or unstructured to parse logically."}
+    
     return {"premises": final_premises, "conclusion": conclusion}
 
 # ------------------------------------------------------------------
@@ -400,12 +354,36 @@ def check_with_sympy(formal_premises: list, formal_conclusion: str, var_map: dic
         return False
 
 # ------------------------------------------------------------------
-# 8. MAIN ANALYSIS PIPELINE
+# 8. MAIN ANALYSIS PIPELINE (with error handling)
 # ------------------------------------------------------------------
 def analyze_argument(text: str) -> dict:
     extracted = extract_arguments(text)
-    premises = extracted["premises"]
-    conclusion = extracted["conclusion"]
+
+    # Handle the minimum-viable-argument error
+    if "error" in extracted:
+        return {
+            "error": extracted["error"],
+            "premises": [],
+            "conclusion": "",
+            "formal_premises": [],
+            "formal_conclusion": "",
+            "valid": False,
+            "fallacies": [],
+        }
+
+    premises = extracted.get("premises", [])
+    conclusion = extracted.get("conclusion", "")
+
+    if not premises or not conclusion:
+        return {
+            "error": "Could not extract a clear argument from this text.",
+            "premises": [],
+            "conclusion": "",
+            "formal_premises": [],
+            "formal_conclusion": "",
+            "valid": False,
+            "fallacies": [],
+        }
 
     formal = translate_to_formal(premises, conclusion)
     if syllogism_detection(premises, conclusion):
@@ -460,8 +438,15 @@ def deconstruct(request: DeconstructRequest):
 @app.post("/test_fallacies")
 def test_fallacies(request: DeconstructRequest):
     extracted = extract_arguments(request.text)
-    premises = extracted["premises"]
-    conclusion = extracted["conclusion"]
+    if "error" in extracted:
+        return {
+            "premises": [],
+            "conclusion": "",
+            "fallacies": [],
+            "error": extracted["error"],
+        }
+    premises = extracted.get("premises", [])
+    conclusion = extracted.get("conclusion", "")
     fallacies = detect_fallacies(premises, conclusion)
     return {
         "premises": premises,
