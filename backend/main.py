@@ -12,8 +12,7 @@ import string
 # ------------------------------------------------------------------
 # URL article extraction
 # ------------------------------------------------------------------
-from newspaper import Article
-
+import trafilatura
 # ------------------------------------------------------------------
 # NLTK for robust sentence splitting
 # ------------------------------------------------------------------
@@ -330,16 +329,40 @@ def syllogism_detection(premises: list, conclusion: str) -> bool:
                 if re.search(r'\b' + re.escape(Z) + r'\s+is\s+' + re.escape(Y) + r'\b', conc_text):
                     return True
 
-    if_match = re.search(r'if\s+(.+?)\s+then\s+(.+)', prem_text)
-    if if_match:
-        X = if_match.group(1).strip()
-        Y = if_match.group(2).strip()
-        if re.search(r'\b' + re.escape(X) + r'\b', prem_text) and \
-           re.search(r'\b' + re.escape(Y) + r'\b', conc_text):
-            return True
+        # Modus ponens - handle "if X, Y" and "if X then Y", plus tense variants
+       # Modus ponens - handle "if X, Y" and "if X then Y", plus tense variants
+    for p in premises:
+        p_lower = p.lower().strip()
+        if_match = re.match(r'if\s+(.+?)(?:\s+then)?\s*,\s*(.+)', p_lower)
+        if not if_match:
+            if_match = re.match(r'if\s+(.+?)\s+then\s+(.+)', p_lower)
+        if if_match:
+            # Strip punctuation from both parts (this was the bug)
+            antecedent = clean_text(if_match.group(1).strip())
+            consequent = clean_text(if_match.group(2).strip())
+
+            other_premises = [op for op in premises if op != p]
+            others_clean = clean_text(" ".join(other_premises))
+            conc_clean = clean_text(conclusion)
+
+            # Direct match
+            if antecedent in others_clean and consequent in conc_clean:
+                return True
+
+            # Stem-based match for tense variations
+            for w in antecedent.split():
+                if w in ('it', 'is', 'the', 'a', 'an', 'that', 'this', 'are'):
+                    continue
+                stem = w
+                if stem.endswith('ing'):
+                    stem = stem[:-3]
+                elif stem.endswith('s'):
+                    stem = stem[:-1]
+                if len(stem) > 3 and stem in others_clean:
+                    if consequent in conc_clean:
+                        return True
 
     return False
-
 # ------------------------------------------------------------------
 # 7. SYMPY CHECK
 # ------------------------------------------------------------------
@@ -412,22 +435,19 @@ def analyze_url(request: dict):
         raise HTTPException(status_code=400, detail="No URL provided")
 
     try:
-        article = Article(url)
-        article.download()
-        article.parse()
-        text = article.text
+        downloaded = trafilatura.fetch_url(url)
+        if not downloaded:
+            return {"error": "Could not fetch the URL. The page might be behind a login or the site is blocking scrapers."}
 
+        text = trafilatura.extract(downloaded)
         if not text or len(text) < 50:
-            return {
-                "error": "Could not extract enough text from the URL. The page might be paywalled or behind a login."
-            }
+            return {"error": "Could not extract enough text from the page."}
 
         text = clean_article_text(text)
         return analyze_argument(text)
 
     except Exception as e:
         return {"error": f"Failed to fetch or parse the URL: {str(e)}"}
-
 # ------------------------------------------------------------------
 # 10. API ENDPOINTS
 # ------------------------------------------------------------------
